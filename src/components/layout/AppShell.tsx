@@ -1,8 +1,7 @@
-import { BarChart3, CalendarDays, CircleDollarSign, Goal, House, LogOut, Menu, Settings, Tags, WalletCards, X } from 'lucide-react'
+import { BarChart3, CalendarDays, Goal, House, LogOut, Menu, Settings, Tags, WalletCards, X } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useState } from 'react'
 import { Brand } from '../Brand'
-import { ThemeLanguageControls } from '../ThemeLanguageControls'
 import { useApp } from '../../context/AppContext'
 
 const navigation = [
@@ -34,7 +33,6 @@ export function AppShell() {
           ))}
         </nav>
         <div className="sidebar__footer">
-          <ThemeLanguageControls />
           <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'nav-link--active' : ''}`}><Settings size={18} /><span>{t('settings')}</span></NavLink>
           <div className="profile-chip">
             <div className="avatar">{user?.displayName.slice(0, 1).toUpperCase()}</div>

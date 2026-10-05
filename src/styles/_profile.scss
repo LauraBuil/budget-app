@@ -1,0 +1,26 @@
+.inline-name-button {
+  border: 0;
+  padding: 0 .12em;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: text;
+  border-radius: 5px;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--accent-soft);
+    outline: none;
+  }
+}
+
+.inline-name-input {
+  width: min(13ch, 100%);
+  border: 0;
+  border-bottom: 2px solid var(--accent-strong);
+  padding: 0 .1em;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  outline: none;
+}

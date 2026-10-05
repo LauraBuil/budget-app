@@ -1,0 +1,10 @@
+.recurring-field {
+  display: grid;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+
+  .checkbox-label { flex-direction: row; align-items: center; gap: .5rem; }
+}

@@ -1,3 +1,7 @@
+@use './styles/profile';
+@use './styles/forms';
+@use './styles/calculator';
+@use './styles/categories';
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;1,500&display=swap');
 
 :root {
@@ -50,11 +54,10 @@ h1, h2, p { margin-top: 0; }
 h1 { font-family: 'Playfair Display', serif; font-size: clamp(1.75rem, 3vw, 2.4rem); font-weight: 500; margin-bottom: .35rem; }
 h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0; }
 
-.brand { position: relative; display: inline-flex; flex-direction: column; width: max-content; line-height: .82; }
-.brand__bloom { font-family: 'Playfair Display', serif; font-size: 4.6rem; letter-spacing: -.06em; }
-.brand__budget { color: var(--accent); font-family: 'Playfair Display', serif; font-size: 3.25rem; font-style: italic; margin-left: 2.3rem; }
-.brand--compact .brand__bloom { font-size: 1.7rem; }
-.brand--compact .brand__budget { font-size: 1rem; margin-left: 1.25rem; }
+.brand { position: relative; display: inline-flex; width: min(100%, 360px); line-height: 1; }
+.brand__logo { display: block; width: 100%; height: auto; object-fit: contain; }
+.brand--compact { width: 54px; height: 54px; }
+.brand--compact .brand__logo { width: 54px; height: 54px; border-radius: 15px; }
 .button { min-height: 42px; padding: .72rem 1.05rem; border: 0; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; cursor: pointer; font-weight: 600; transition: .2s ease; }
 .button:hover { transform: translateY(-1px); }
 .button:disabled { opacity: .6; cursor: wait; }
@@ -87,9 +90,14 @@ h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0; }
 .auth-switch { text-align: center; color: var(--muted); font-size: .84rem; margin: .35rem 0 0; }
 .auth-switch button { color: var(--accent-strong); border: 0; background: transparent; font-weight: 600; cursor: pointer; }
 .preference-controls { display: flex; align-items: center; gap: .5rem; }
+.preference-controls--floating { position: fixed; top: 1rem; right: 1.25rem; z-index: 40; padding: .22rem; border-radius: 12px; background: color-mix(in srgb, var(--surface-solid) 84%, transparent); box-shadow: 0 8px 22px rgba(69, 45, 39, .08); backdrop-filter: blur(14px); }
 .preference-controls--compact { position: absolute; top: 2rem; right: 2rem; }
 .icon-toggle, .language-toggle, .month-button { min-height: 36px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .65rem; cursor: pointer; }
 .language-toggle span { font-size: .72rem; font-weight: 700; }
+.month-picker { position: relative; }
+.month-picker__menu { position: absolute; top: calc(100% + .45rem); right: 0; z-index: 10; min-width: 190px; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .45rem; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-solid); box-shadow: var(--shadow); }
+.month-picker__menu button { display: grid; place-items: center; border: 0; border-radius: 7px; padding: .35rem; color: var(--text); background: transparent; cursor: pointer; }
+.month-picker__menu button:hover { background: var(--accent-soft); }
 
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 228px 1fr; }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 1.35rem 1rem; background: var(--sidebar); border-right: 1px solid var(--line); display: flex; flex-direction: column; backdrop-filter: blur(18px); z-index: 20; }
