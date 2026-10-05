@@ -1,6 +1,14 @@
 export type Language = 'fr' | 'en'
 export type Theme = 'light' | 'dark'
 export type TransactionType = 'income' | 'expense'
+export type ExpenseGroup = 'fixed' | 'daily' | 'nonEssential' | 'unexpected'
+
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  group: ExpenseGroup
+}
 
 export interface Transaction {
   id: string
@@ -10,6 +18,13 @@ export interface Transaction {
   category: string
   date: string
   note?: string
+  isRecurring?: boolean
+  recurrenceDay?: number
+  expenseGroup?: ExpenseGroup
+}
+
+export interface TransactionDraft extends Omit<Transaction, 'id'> {
+  recurrence?: { day: number }
 }
 
 export interface Budget {
