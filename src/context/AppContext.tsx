@@ -2,6 +2,7 @@ import {createContext, type ReactNode, useCallback, useContext, useEffect, useMe
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile
@@ -24,6 +25,7 @@ interface AppContextValue {
   setLanguage: (language: Language) => void
   setTheme: (theme: Theme) => void
   login: (email: string, password: string, register?: boolean) => Promise<void>
+  resetPassword: (email: string) => Promise<void>
   updateDisplayName: (displayName: string) => Promise<void>
   addCategory: (name: string, group: ExpenseGroup) => Promise<Category>
   refreshTransactions: (month?: string) => Promise<void>
@@ -102,6 +104,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await result.user.getIdToken()
   }, [])
 
+  const resetPassword = useCallback(async (email: string) => {
+    if (!auth || !isFirebaseConfigured) throw new Error('FIREBASE_NOT_CONFIGURED')
+    await sendPasswordResetEmail(auth, email.trim())
+  }, [])
+
   const logout = useCallback(async () => {
     ++authEpoch.current
     setUser(null)
@@ -147,8 +154,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     data, categories, user, isAuthReady, language, theme, isDemo: Boolean(user?.isDemo || !isFirebaseConfigured),
-    t: (key) => translate(language, key), setLanguage, setTheme, login, updateDisplayName, addCategory, refreshTransactions: loadTransactions, logout, addTransaction,
-  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, updateDisplayName, addCategory, loadTransactions, logout, addTransaction])
+    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, refreshTransactions: loadTransactions, logout, addTransaction,
+  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, loadTransactions, logout, addTransaction])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
