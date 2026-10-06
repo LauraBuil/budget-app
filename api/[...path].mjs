@@ -1,5 +1,3 @@
-import app, { schemaReady } from '../server/index.mjs'
-
-await schemaReady
+import app from '../server/index.mjs'
 
 export default app

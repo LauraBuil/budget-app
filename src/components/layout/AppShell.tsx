@@ -14,12 +14,12 @@ const navigation = [
 ] as const
 
 export function AppShell() {
-  const { t, user, logout, isDemo } = useApp()
+  const { t, user, logout } = useApp()
   const [open, setOpen] = useState(false)
   return (
     <div className="app-shell">
-      <button className="mobile-menu" onClick={() => setOpen(true)} aria-label="Menu"><Menu /></button>
-      {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Fermer le menu" />}
+      <button className="mobile-menu" onClick={() => setOpen(true)} aria-label={t('menu')}><Menu /></button>
+      {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label={t('closeMenu')} />}
       <aside className={`sidebar ${open ? 'sidebar--open' : ''}`}>
         <div className="sidebar__top">
           <Brand compact />
@@ -36,7 +36,7 @@ export function AppShell() {
           <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'nav-link--active' : ''}`}><Settings size={18} /><span>{t('settings')}</span></NavLink>
           <div className="profile-chip">
             <div className="avatar">{user?.displayName.slice(0, 1).toUpperCase()}</div>
-            <div><strong>{user?.displayName}</strong><span>{isDemo ? t('demoMode') : user?.email}</span></div>
+            <div><strong>{user?.displayName}</strong><span>{user?.email}</span></div>
             <button onClick={logout} aria-label={t('signOut')}><LogOut size={16} /></button>
           </div>
         </div>

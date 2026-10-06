@@ -1,3 +1,5 @@
+@use './tokens' as *;
+
 .calculator-widget {
   position: fixed;
   right: 1.25rem;
@@ -10,15 +12,15 @@
   height: 42px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid $line;
   border-radius: 50%;
-  color: var(--text);
-  background: var(--surface-solid);
-  box-shadow: var(--shadow);
+  color: $text;
+  background: $surface-solid;
+  box-shadow: $shadow;
   cursor: pointer;
   transition: transform .2s ease, background .2s ease;
 
-  &:hover { transform: translateY(-2px); background: var(--accent-soft); }
+  &:hover { transform: translateY(-2px); background: $accent-soft; }
 }
 
 .calculator-panel {
@@ -27,19 +29,19 @@
   bottom: 3.25rem;
   width: min(290px, calc(100vw - 2rem));
   padding: .8rem;
-  border: 1px solid var(--line);
+  border: 1px solid $line;
   border-radius: 16px;
-  background: var(--surface-solid);
+  background: $surface-solid;
   box-shadow: 0 20px 60px rgba(0, 0, 0, .2);
 }
 
 .calculator-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .65rem; }
-.calculator-panel header button { display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
-.calculator-panel output { display: block; overflow: hidden; padding: .65rem .7rem 1rem; color: var(--text); font-size: 1.55rem; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.calculator-panel header button { display: grid; place-items: center; border: 0; background: transparent; color: $muted; cursor: pointer; }
+.calculator-panel output { display: block; overflow: hidden; padding: .65rem .7rem 1rem; color: $text; font-size: 1.55rem; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .calculator-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; }
-.calculator-keys button { min-height: 42px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); background: var(--surface-subtle); cursor: pointer; }
-.calculator-keys button:hover { background: var(--accent-soft); }
-.calculator-key--operator, .calculator-key--equals { color: var(--accent-strong) !important; font-weight: 700; }
+.calculator-keys button { min-height: 42px; border: 1px solid $line; border-radius: 9px; color: $text; background: $surface-subtle; cursor: pointer; }
+.calculator-keys button:hover { background: $accent-soft; }
+.calculator-key--operator, .calculator-key--equals { color: $accent-strong !important; font-weight: 700; }
 .calculator-key--wide { grid-column: span 2; }
 
 @media (max-width: 560px) {

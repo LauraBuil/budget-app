@@ -1,0 +1,19 @@
+$font-size-2xs: .85rem;
+$font-size-xs: .85rem;
+$font-size-sm: 1rem;
+$font-size-base: 1rem;
+
+$bg: light-dark(#eee7e2, #121110);
+$surface: light-dark(rgba(255, 251, 248, .9), rgba(31, 29, 28, .94));
+$surface-solid: light-dark(#fffaf7, #211f1e);
+$surface-subtle: light-dark(#f7efeb, #282523);
+$sidebar: light-dark(rgba(255, 249, 246, .78), rgba(27, 25, 24, .96));
+$text: light-dark(#442f2f, #f7ece7);
+$muted: light-dark(#927e79, #b4a6a0);
+$line: light-dark(rgba(89, 61, 58, .1), rgba(255, 244, 238, .09));
+$accent: light-dark(#d5908a, #efa49d);
+$accent-strong: light-dark(#bd6d68, #f0aaa3);
+$accent-soft: light-dark(#f3d6d2, #4a302e);
+$olive: light-dark(#8e8f7a, #a5a68c);
+$gold: light-dark(#c49b67, #d3aa73);
+$shadow: 0 18px 50px light-dark(rgba(93, 65, 58, .08), rgba(0, 0, 0, .28));
