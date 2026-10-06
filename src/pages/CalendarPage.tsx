@@ -1,10 +1,36 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '../components/ui/Card'
+import { MonthPicker } from '../components/ui/MonthPicker'
+import { CalendarDayModal } from '../components/CalendarDayModal'
+import { TransactionModal } from '../components/TransactionModal'
 import { useApp } from '../context/AppContext'
 import { formatCurrency } from '../lib/format'
+import type { Transaction } from '../types'
+
+const currentMonth = () => new Date().toISOString().slice(0, 7)
 
 export function CalendarPage() {
-  const { t, language } = useApp()
-  const days = Array.from({ length: 31 }, (_, index) => index + 1)
-  const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'short' }).format(new Date(2026, 9, 5 + index)))
-  return <div className="page"><header className="page-header"><div><h1>{t('calendarTitle')}</h1><p>{t('october2026')}</p></div></header><section className="calendar-layout"><Card className="calendar-card"><div className="calendar-weekdays">{weekdays.map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: 3 }).map((_, index) => <span key={`blank-${index}`} />)}{days.map((day) => <button key={day} className={[1,2,4,5,6].includes(day) ? 'has-payment' : ''}><span>{day}</span>{day === 1 && <small>{t('salary')}</small>}{day === 2 && <small>{t('rent')}</small>}{day === 4 && <small>Spotify</small>}</button>)}</div></Card><Card className="panel upcoming-panel"><div className="panel__header"><h2>{t('upcoming')}</h2></div><div className="upcoming-item"><span>02</span><div><strong>{t('rent')}</strong><small>{formatCurrency(905, language)}</small></div></div><div className="upcoming-item"><span>04</span><div><strong>Spotify</strong><small>{formatCurrency(12.99, language)}</small></div></div><div className="upcoming-item"><span>15</span><div><strong>{t('electricity')}</strong><small>{formatCurrency(100, language)}</small></div></div></Card></section></div>
+  const { data, t, language, refreshTransactions } = useApp()
+  const [month, setMonth] = useState(currentMonth)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [editor, setEditor] = useState<{ date: string; transaction?: Transaction } | null>(null)
+
+  useEffect(() => { void refreshTransactions(month) }, [month, refreshTransactions])
+
+  const daysInMonth = new Date(`${month}-01T12:00:00`).getMonth() + 1
+  const days = Array.from({ length: new Date(new Date(`${month}-01T12:00:00`).getFullYear(), daysInMonth, 0).getDate() }, (_, index) => index + 1)
+  const firstDay = (new Date(`${month}-01T12:00:00`).getDay() + 6) % 7
+  const weekdays = Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(language === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'short' }).format(new Date(2024, 0, 1 + index)))
+  const transactions = useMemo(() => data.transactions.filter((item) => item.date.startsWith(month)), [data.transactions, month])
+  const selectedTransactions = selectedDate ? transactions.filter((item) => item.date === selectedDate) : []
+
+  return <div className="page">
+    <header className="page-header"><div><h1>{t('calendarTitle')}</h1><p><MonthPicker value={month} language={language} onChange={setMonth}/></p></div></header>
+    <section className="calendar-layout">
+      <Card className="calendar-card"><div className="calendar-weekdays">{weekdays.map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: firstDay }).map((_, index) => <span key={`blank-${index}`} />)}{days.map((day) => { const date = `${month}-${String(day).padStart(2, '0')}`; const entries = transactions.filter((item) => item.date === date); return <button key={day} type="button" className={entries.length ? 'has-payment' : ''} onClick={() => setSelectedDate(date)}><span>{day}</span><div className="calendar-day__entries">{entries.slice(0, 2).map((item) => <small key={item.id}>{item.type === 'income' ? '+' : '−'} {item.label}</small>)}{entries.length > 2 && <small>+{entries.length - 2}</small>}</div></button> })}</div></Card>
+      <Card className="panel upcoming-panel"><div className="panel__header"><h2>{t('upcoming')}</h2></div>{transactions.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5).map((transaction) => <div className="upcoming-item" key={transaction.id}><span>{transaction.date.slice(-2)}</span><div><strong>{transaction.label}</strong><small className={`transaction-amount--${transaction.type}`}>{transaction.type === 'income' ? '+' : '−'} {formatCurrency(transaction.amount, language)}</small></div></div>)}</Card>
+    </section>
+    <CalendarDayModal date={selectedDate} transactions={selectedTransactions} onClose={() => setSelectedDate(null)} onAdd={() => { if (selectedDate) setEditor({ date: selectedDate }); setSelectedDate(null) }} onEdit={(transaction) => { setEditor({ date: transaction.date, transaction }); setSelectedDate(null) }}/>
+    <TransactionModal open={Boolean(editor)} initialDate={editor?.date} transaction={editor?.transaction} onClose={() => setEditor(null)}/>
+  </div>
 }

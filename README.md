@@ -17,6 +17,7 @@ Gasel est une application personnelle de gestion de budget. Firebase Authenticat
 
 ```bash
 npm install
+npm run db:migrate
 npm run dev
 ```
 
@@ -47,7 +48,13 @@ CLIENT_ORIGIN=http://localhost:5173
 
 ## Neon
 
-Créez un projet PostgreSQL Neon et copiez sa connection string dans `DATABASE_URL`. Les tables `transactions`, `categories` et `recurring_expenses` sont créées ou mises à jour automatiquement au démarrage de l’API.
+Créez un projet PostgreSQL Neon et copiez sa connection string dans `DATABASE_URL`. Installez ou mettez à jour les tables `transactions`, `categories`, `recurring_expenses`, `budgets` et `goals` avec :
+
+```bash
+npm run db:migrate
+```
+
+Cette commande s’exécute volontairement hors des requêtes de l’application : Vercel ne lance donc pas de création de table ni de mise à jour de données lors d’un démarrage à froid.
 
 ## Déploiement Vercel
 
@@ -84,6 +91,12 @@ Ne partagez jamais la valeur de `DATABASE_URL` dans le dépôt ou une capture d�
 
 ### 3. Déployer
 
+Avant le premier déploiement et après toute mise à jour du schéma, lancez une fois la migration avec la variable `DATABASE_URL` de production disponible localement :
+
+```bash
+npm run db:migrate
+```
+
 Pour tester sans publier la version finale :
 
 ```bash
@@ -108,6 +121,7 @@ Vérifiez ensuite la connexion, l’inscription, `https://gasel.app/api/health` 
 
 ```bash
 npm run build
+npm run test:security
 ```
 
 Les données personnelles de l’ancien classeur Excel ne sont pas incluses dans le code source.

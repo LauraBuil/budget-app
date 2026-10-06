@@ -1,0 +1,28 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { X } from 'lucide-react'
+import { useApp } from '../context/AppContext'
+import { Button } from './ui/Button'
+import type { Budget, BudgetDraft } from '../types'
+
+const categoryOptions = ['housing', 'groceries', 'transport', 'leisure', 'food', 'fuel', 'insurance', 'other']
+const colors = ['#c87d78', '#dca39b', '#9c9b86', '#e8b7ad', '#8ca6a0', '#b89cc5']
+
+export function BudgetModal({ open, budget, onClose }: { open: boolean; budget?: Budget; onClose: () => void }) {
+  const { t, categories, addBudget, updateBudget } = useApp()
+  const categoryChoices = Array.from(new Set([...categoryOptions, ...categories.filter((item) => item.type === 'expense').map((item) => item.slug)]))
+  const [category, setCategory] = useState(budget?.category || categoryOptions[0])
+  const [limit, setLimit] = useState(String(budget?.limit || ''))
+  const [color, setColor] = useState(budget?.color || colors[0])
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setCategory(budget?.category || categoryChoices[0]); setLimit(budget ? String(budget.limit) : ''); setColor(budget?.color || colors[0]) }, [budget, open])
+  if (!open) return null
+
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setSaving(true)
+    const draft: BudgetDraft = { category, limit: Number(limit), color }
+    try { if (budget) await updateBudget(budget.id, draft); else await addBudget(draft) } finally { setSaving(false); onClose() }
+  }
+
+  return <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="budget-title"><header><h2 id="budget-title">{budget ? t('editBudget') : t('addBudget')}</h2><button type="button" onClick={onClose} aria-label={t('close')}><X size={20}/></button></header><form onSubmit={submit} className="form-grid"><label>{t('category')}<select value={category} onChange={(event) => setCategory(event.target.value)}>{categoryChoices.map((item) => <option key={item} value={item}>{t(item as Parameters<typeof t>[0])}</option>)}</select></label><label>{t('budgetAmount')}<input required type="number" min="0.01" step="0.01" value={limit} onChange={(event) => setLimit(event.target.value)}/></label><label className="form-grid__wide">{t('budgetColor')}<div className="color-options">{colors.map((item) => <button type="button" key={item} className={color === item ? 'active' : ''} style={{ background: item }} onClick={() => setColor(item)} aria-label={item}/>)}</div></label><div className="modal__actions"><Button type="button" variant="secondary" onClick={onClose}>{t('cancel')}</Button><Button type="submit" disabled={saving}>{budget ? t('save') : t('add')}</Button></div></form></section></div>
+}

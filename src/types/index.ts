@@ -8,6 +8,7 @@ export interface Category {
   name: string
   slug: string
   group: ExpenseGroup
+  type: TransactionType
 }
 
 export interface Transaction {
@@ -24,7 +25,7 @@ export interface Transaction {
 }
 
 export interface TransactionDraft extends Omit<Transaction, 'id'> {
-  recurrence?: { day: number }
+  recurrence?: { day: number } | null
 }
 
 export interface Budget {
@@ -35,6 +36,8 @@ export interface Budget {
   color: string
 }
 
+export type BudgetDraft = Pick<Budget, 'category' | 'limit' | 'color'>
+
 export interface Goal {
   id: string
   name: string
@@ -43,6 +46,8 @@ export interface Goal {
   dueDate?: string
   icon: 'travel' | 'tech' | 'safety'
 }
+
+export type GoalDraft = Omit<Goal, 'id' | 'saved'> & { saved?: number }
 
 export interface MonthPoint {
   month: string

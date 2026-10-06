@@ -1,3 +1,5 @@
+@use './tokens' as *;
+
 .inline-name-button {
   border: 0;
   padding: 0 .12em;
@@ -9,7 +11,7 @@
 
   &:hover,
   &:focus-visible {
-    background: var(--accent-soft);
+    background: $accent-soft;
     outline: none;
   }
 }
@@ -17,7 +19,7 @@
 .inline-name-input {
   width: min(13ch, 100%);
   border: 0;
-  border-bottom: 2px solid var(--accent-strong);
+  border-bottom: 2px solid $accent-strong;
   padding: 0 .1em;
   color: inherit;
   background: transparent;

@@ -9,7 +9,7 @@ assert.equal(isSupportedMonth('2026-10', '2026-10'), true)
 assert.deepEqual(getRecurrenceWindow('2026-10', '2026-10', '2027-03'), {
   start: '2026-10',
   end: '2027-03',
-  months: ['2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'],
+  months: [],
 })
 assert.deepEqual(getRecurrenceWindow('2027-03', '2026-10', '2027-03'), {
   start: '2026-10',

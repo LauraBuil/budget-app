@@ -29,11 +29,19 @@ export function dateForMonth(month, day) {
 }
 
 export function getRecurrenceWindow(requestedMonth, storedStart, storedEnd) {
-  const start = isSupportedMonth(storedStart) ? storedStart : currentMonth()
-  const previousEnd = isSupportedMonth(storedEnd) ? storedEnd : shiftMonthValue(start, 5)
-  const shouldExtend = requestedMonth === previousEnd
-  const generationStart = shouldExtend ? shiftMonthValue(previousEnd, 1) : shiftMonthValue(previousEnd, -5)
-  const end = shouldExtend ? shiftMonthValue(previousEnd, 6) : previousEnd
-  const months = Array.from({ length: 6 }, (_, offset) => shiftMonthValue(generationStart, offset))
-  return { start, end, months }
+  const hasStoredWindow = isSupportedMonth(storedStart) && isSupportedMonth(storedEnd)
+  if (!hasStoredWindow) {
+    const start = currentMonth()
+    const end = shiftMonthValue(start, 5)
+    return { start, end, months: Array.from({ length: 6 }, (_, offset) => shiftMonthValue(start, offset)) }
+  }
+
+  if (requestedMonth !== storedEnd) return { start: storedStart, end: storedEnd, months: [] }
+
+  const end = shiftMonthValue(storedEnd, 6)
+  return {
+    start: storedStart,
+    end,
+    months: Array.from({ length: 6 }, (_, offset) => shiftMonthValue(storedEnd, offset + 1)),
+  }
 }
