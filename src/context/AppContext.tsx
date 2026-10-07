@@ -8,7 +8,7 @@ import {
   updateProfile
 } from 'firebase/auth'
 import {auth, isFirebaseConfigured} from '../lib/firebase'
-import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, saveOpeningBalance as persistOpeningBalance, updateBudget as persistBudget, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
+import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, type TransactionsQuery, updateBudget as persistBudget, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
 import {translate, type TranslationKey} from '../lib/i18n'
 import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, TransactionDraft, TransactionType, UserProfile} from '../types'
 
@@ -26,7 +26,7 @@ interface AppContextValue {
   resetPassword: (email: string) => Promise<void>
   updateDisplayName: (displayName: string) => Promise<void>
   addCategory: (name: string, group: ExpenseGroup, type: TransactionType) => Promise<Category>
-  refreshTransactions: (month?: string) => Promise<void>
+  refreshTransactions: (startMonth?: string, endMonth?: string, filters?: TransactionsQuery) => Promise<void>
   logout: () => Promise<void>
   addTransaction: (transaction: TransactionDraft) => Promise<void>
   updateTransaction: (id: string, transaction: TransactionDraft) => Promise<void>
@@ -37,8 +37,10 @@ interface AppContextValue {
   updateGoal: (id: string, goal: GoalDraft) => Promise<void>
   deleteBudget: (id: string) => Promise<void>
   deleteGoal: (id: string) => Promise<void>
-  getOpeningBalance: (month: string) => Promise<number>
+  getOpeningBalance: (month: string) => Promise<OpeningBalance>
   saveOpeningBalance: (month: string, value: number) => Promise<number>
+  restoreOpeningBalance: (month: string) => Promise<OpeningBalance>
+  moveOpeningBalanceToGoal: (month: string, goalId: string, amount: number) => Promise<number>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -52,6 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(emptyAccountData)
   const [categories, setCategories] = useState<Category[]>([])
   const authEpoch = useRef(0)
+  const transactionsRequestId = useRef(0)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -66,11 +69,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setTheme = useCallback((next: Theme) => setThemeState(next), [])
 
-  const loadTransactions = useCallback(async (month?: string) => {
+  const loadTransactions = useCallback(async (startMonth?: string, endMonth?: string, filters?: TransactionsQuery) => {
     const uid = auth?.currentUser?.uid
+    const epoch = authEpoch.current
     if (!uid) throw new Error('AUTH_REQUIRED')
-    const transactions = await getTransactions(month)
-    if (auth?.currentUser?.uid !== uid) return
+    const requestId = ++transactionsRequestId.current
+    const transactions = await getTransactions(startMonth, endMonth, filters)
+    if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch || requestId !== transactionsRequestId.current) return
     setData((current) => ({ ...current, transactions }))
   }, [])
 
@@ -185,7 +190,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadBudgets])
 
   const deleteTransaction = useCallback(async (id: string) => {
-    const deleted = auth?.currentUser ? await removeTransaction(id) : { ids: [id] }
+    const uid = auth?.currentUser?.uid
+    const epoch = authEpoch.current
+    if (!uid) throw new Error('AUTH_REQUIRED')
+    ++transactionsRequestId.current
+    const deleted = await removeTransaction(id)
+    if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.filter((item) => !deleted.ids.includes(item.id)) }))
     await loadBudgets()
   }, [loadBudgets])
@@ -221,8 +231,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const getOpeningBalance = useCallback(async (month: string) => {
-    if (auth?.currentUser) return (await fetchOpeningBalance(month)).openingBalance
-    return Number(localStorage.getItem(`gasel-opening-balance-${month}`) || 0)
+    if (auth?.currentUser) return fetchOpeningBalance(month)
+    const stored = localStorage.getItem(`gasel-opening-balance-${month}`)
+    const openingBalance = Number(stored || 0)
+    return { openingBalance, automaticOpeningBalance: openingBalance, isManual: stored !== null }
   }, [])
 
   const saveOpeningBalance = useCallback(async (month: string, value: number) => {
@@ -232,10 +244,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return value
   }, [])
 
+  const restoreOpeningBalance = useCallback(async (month: string) => {
+    if (auth?.currentUser) return restorePersistedOpeningBalance(month)
+    localStorage.removeItem(`gasel-opening-balance-${month}`)
+    return { openingBalance: 0, automaticOpeningBalance: 0, isManual: false }
+  }, [])
+
+  const moveOpeningBalanceToGoal = useCallback(async (month: string, goalId: string, amount: number) => {
+    if (!auth?.currentUser) {
+      localStorage.setItem(`gasel-opening-balance-${month}`, '0')
+      setData((current) => ({ ...current, goals: current.goals.map((goal) => goal.id === goalId ? { ...goal, saved: goal.saved + amount } : goal) }))
+      return 0
+    }
+    const result = await persistOpeningBalanceToGoal(month, goalId, amount)
+    setData((current) => ({ ...current, goals: current.goals.map((goal) => goal.id === result.goal.id ? result.goal : goal) }))
+    return result.openingBalance
+  }, [])
+
   const value = useMemo<AppContextValue>(() => ({
     data, categories, user, isAuthReady, language, theme,
-    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance,
-  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance])
+    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal,
+  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

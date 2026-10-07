@@ -17,7 +17,7 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [editor, setEditor] = useState<{ date: string; transaction?: Transaction } | null>(null)
 
-  useEffect(() => { void refreshTransactions(month) }, [month, refreshTransactions])
+  useEffect(() => { void refreshTransactions(month, month) }, [month, refreshTransactions])
 
   const daysInMonth = new Date(`${month}-01T12:00:00`).getMonth() + 1
   const days = Array.from({ length: new Date(new Date(`${month}-01T12:00:00`).getFullYear(), daysInMonth, 0).getDate() }, (_, index) => index + 1)
