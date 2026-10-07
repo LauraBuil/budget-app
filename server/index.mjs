@@ -302,7 +302,7 @@ const goalIcons = new Set(['travel', 'tech', 'safety'])
 
 async function budgetRows(uid) {
   return sql`
-    SELECT b.id, b.category, b.monthly_limit::float8 AS limit, b.color,
+    SELECT b.id, b.name, b.category, b.monthly_limit::float8 AS limit, b.color, b.note,
       COALESCE(SUM(t.amount), 0)::float8 AS spent
     FROM budgets b
     LEFT JOIN transactions t ON t.user_id = b.user_id
@@ -316,10 +316,12 @@ async function budgetRows(uid) {
 }
 
 function validBudget(body) {
+  const name = typeof body?.name === 'string' ? body.name.trim() : ''
   const category = typeof body?.category === 'string' ? body.category.trim() : ''
   const limit = Number(body?.limit)
   const color = typeof body?.color === 'string' && budgetColors.has(body.color) ? body.color : '#c87d78'
-  return /^[a-z0-9-]{1,80}$/.test(category) && Number.isFinite(limit) && limit > 0 && limit <= 10_000_000 ? { category, limit, color } : null
+  const note = typeof body?.note === 'string' ? body.note.trim() : ''
+  return name.length <= 80 && /^[a-z0-9-]{1,80}$/.test(category) && Number.isFinite(limit) && limit > 0 && limit <= 10_000_000 && note.length <= 1000 ? { name, category, limit, color, note } : null
 }
 
 app.get('/api/budgets', authenticate, async (request, response, next) => {
@@ -331,9 +333,9 @@ app.post('/api/budgets', authenticate, async (request, response, next) => {
   if (!budget) return response.status(400).json({ error: 'INVALID_BUDGET' })
   try {
     await sql`
-      INSERT INTO budgets (id, user_id, category, monthly_limit, color)
-      VALUES (${crypto.randomUUID()}, ${request.user.uid}, ${budget.category}, ${budget.limit}, ${budget.color})
-      ON CONFLICT (user_id, category) DO UPDATE SET monthly_limit = EXCLUDED.monthly_limit, color = EXCLUDED.color
+      INSERT INTO budgets (id, user_id, name, category, monthly_limit, color, note)
+      VALUES (${crypto.randomUUID()}, ${request.user.uid}, ${budget.name}, ${budget.category}, ${budget.limit}, ${budget.color}, ${budget.note})
+      ON CONFLICT (user_id, category) DO UPDATE SET name = EXCLUDED.name, monthly_limit = EXCLUDED.monthly_limit, color = EXCLUDED.color, note = EXCLUDED.note
     `
     const rows = await budgetRows(request.user.uid)
     return response.status(201).json(rows.find((item) => item.category === budget.category))
@@ -345,7 +347,7 @@ app.patch('/api/budgets/:id', authenticate, async (request, response, next) => {
   if (!budget) return response.status(400).json({ error: 'INVALID_BUDGET' })
   try {
     const rows = await sql`
-      UPDATE budgets SET category = ${budget.category}, monthly_limit = ${budget.limit}, color = ${budget.color}
+      UPDATE budgets SET name = ${budget.name}, category = ${budget.category}, monthly_limit = ${budget.limit}, color = ${budget.color}, note = ${budget.note}
       WHERE id = ${request.params.id} AND user_id = ${request.user.uid}
       RETURNING id
     `

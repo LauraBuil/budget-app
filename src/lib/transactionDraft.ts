@@ -12,3 +12,7 @@ export function transactionDraftWithAmount(transaction: Transaction, amount: num
     recurrence: transaction.isRecurring ? { day: transaction.recurrenceDay || Number(transaction.date.slice(-2)) } : null,
   }
 }
+
+export function transactionDraftWithLabel(transaction: Transaction, label: string): TransactionDraft {
+  return { ...transactionDraftWithAmount(transaction, transaction.amount), label }
+}

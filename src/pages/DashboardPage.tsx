@@ -14,10 +14,11 @@ import { formatCurrency, formatDate } from '../lib/format'
 import { formatMonth } from '../lib/months'
 import { MonthlyBalanceCard } from '../components/MonthlyBalanceCard'
 import { DashboardDetailModal } from '../components/DashboardDetailModal'
+import { InlineEditableText } from '../components/ui/InlineEditableText'
 import { getCategoryTotals, getFinancialHistory } from '../lib/financialData'
 
 export function DashboardPage() {
-  const { data, t, language, user, updateDisplayName, refreshTransactions, categories } = useApp()
+  const { data, t, language, user, updateDisplayName, refreshTransactions, categories, updateGoal } = useApp()
   const [modalOpen, setModalOpen] = useState(false)
   const [detail, setDetail] = useState<'income' | 'expense' | 'savings' | null>(null)
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7))
@@ -57,7 +58,7 @@ export function DashboardPage() {
         <Card className="panel panel--donut"><div className="panel__header"><h2>{t('spendingByCategory')}</h2></div><div className="donut-layout"><div className="donut" style={{ background: categoryTotals.length ? `conic-gradient(${categoryTotals.map((item, index) => `${item.color} ${categoryTotals.slice(0,index).reduce((sum,c)=>sum+c.percentage,0)}% ${categoryTotals.slice(0,index+1).reduce((sum,c)=>sum+c.percentage,0)}%`).join(',')})` : '#e8dfda' }}><div><strong>{formatCurrency(totals.expenses, language)}</strong><span>{t('thisMonth').toLowerCase()}</span></div></div><div className="category-legend">{categoryTotals.map((item) => <div key={item.category}><span style={{ background: item.color }}/><span>{categoryName(item.category)}</span><strong>{item.percentage}%</strong></div>)}</div></div></Card>
         <Card className="panel"><div className="panel__header"><h2>{t('monthlyBudgets')}</h2><Link to="/budgets">{t('seeAll')}</Link></div><div className="budget-list">{data.budgets.map((budget) => <BudgetRow key={budget.id} budget={budget}/>)}</div></Card>
         <Card className="panel"><div className="panel__header"><h2>{t('recentTransactions')}</h2><Link to="/transactions">{t('seeAll')}</Link></div><TransactionList transactions={monthTransactions} limit={4}/></Card>
-        <Card className="panel goals-panel"><div className="panel__header"><h2>{t('myGoals')}</h2><Link to="/goals">{t('seeAll')}</Link></div>{data.goals.map((goal) => { const progress = Math.round((goal.saved / goal.target) * 100); return <div className="goal-mini" key={goal.id}><div><strong>{t(goal.name as Parameters<typeof t>[0])}</strong><span>{formatCurrency(goal.saved, language)} / {formatCurrency(goal.target, language)}</span></div><div className="progress"><span style={{ width: `${progress}%` }}/></div><b>{progress}%</b></div>})}</Card>
+        <Card className="panel goals-panel"><div className="panel__header"><h2>{t('myGoals')}</h2><Link to="/goals">{t('seeAll')}</Link></div>{data.goals.map((goal) => { const progress = Math.round((goal.saved / goal.target) * 100); return <div className="goal-mini" key={goal.id}><div><strong><InlineEditableText value={goal.name} display={t(goal.name as Parameters<typeof t>[0])} label={t('goalName')} onSave={(name) => updateGoal(goal.id, { name, target: goal.target, saved: goal.saved, dueDate: goal.dueDate, icon: goal.icon })}/></strong><span>{formatCurrency(goal.saved, language)} / {formatCurrency(goal.target, language)}</span></div><div className="progress"><span style={{ width: `${progress}%` }}/></div><b>{progress}%</b></div>})}</Card>
       </section>
       <TransactionModal open={modalOpen} onClose={() => setModalOpen(false)}/>
       <DashboardDetailModal kind={detail} transactions={monthTransactions} goals={data.goals} onClose={() => setDetail(null)}/>

@@ -66,13 +66,17 @@ export async function ensureSchema(sql) {
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '' CHECK (char_length(name) <= 80),
       category TEXT NOT NULL CHECK (char_length(category) BETWEEN 1 AND 80),
       monthly_limit NUMERIC(12, 2) NOT NULL CHECK (monthly_limit > 0),
       color TEXT NOT NULL DEFAULT '#c87d78' CHECK (color ~ '^#[0-9a-fA-F]{6}$'),
+      note TEXT NOT NULL DEFAULT '' CHECK (char_length(note) <= 1000),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (user_id, category)
     )
   `
+  await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '' CHECK (char_length(name) <= 80)`
+  await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '' CHECK (char_length(note) <= 1000)`
   await sql`
     CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY,

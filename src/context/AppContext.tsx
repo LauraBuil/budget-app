@@ -74,6 +74,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData((current) => ({ ...current, transactions }))
   }, [])
 
+  const loadBudgets = useCallback(async () => {
+    const uid = auth?.currentUser?.uid
+    const epoch = authEpoch.current
+    if (!uid) return
+    const budgets = await getBudgets()
+    if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
+    setData((current) => ({ ...current, budgets }))
+  }, [])
+
   useEffect(() => {
     if (!auth) return
     return onAuthStateChanged(auth, (firebaseUser) => {
@@ -162,7 +171,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const created = await createTransaction(transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: [created, ...current.transactions] }))
-  }, [])
+    await loadBudgets()
+  }, [loadBudgets])
 
   const updateTransaction = useCallback(async (id: string, transaction: TransactionDraft) => {
     const uid = auth?.currentUser?.uid
@@ -171,12 +181,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = await persistTransaction(id, transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.map((item) => item.id === id ? updated : item) }))
-  }, [])
+    await loadBudgets()
+  }, [loadBudgets])
 
   const deleteTransaction = useCallback(async (id: string) => {
     const deleted = auth?.currentUser ? await removeTransaction(id) : { ids: [id] }
     setData((current) => ({ ...current, transactions: current.transactions.filter((item) => !deleted.ids.includes(item.id)) }))
-  }, [])
+    await loadBudgets()
+  }, [loadBudgets])
 
   const addBudget = useCallback(async (budget: BudgetDraft) => {
     const created = auth?.currentUser ? await createBudget(budget) : { ...budget, id: `budget-${Date.now()}`, spent: 0 }

@@ -30,13 +30,15 @@ export interface TransactionDraft extends Omit<Transaction, 'id'> {
 
 export interface Budget {
   id: string
+  name: string
   category: string
   limit: number
   spent: number
   color: string
+  note: string
 }
 
-export type BudgetDraft = Pick<Budget, 'category' | 'limit' | 'color'>
+export type BudgetDraft = Pick<Budget, 'name' | 'category' | 'limit' | 'color' | 'note'>
 
 export interface Goal {
   id: string
