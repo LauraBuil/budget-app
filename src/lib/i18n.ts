@@ -3,6 +3,7 @@ import type { Language } from '../types'
 const dictionary = {
   fr: {
     add: 'Ajouter',
+    addComment: 'Ajouter un commentaire',
     addBudget: 'Ajouter un budget',
     addGoal: 'Ajouter un objectif',
     addIncome: 'Ajouter un revenu',
@@ -18,6 +19,9 @@ const dictionary = {
     budgetVsActual: 'Budget prévu et dépenses réelles',
     budgetAmount: 'Montant mensuel',
     budgetColor: 'Couleur de catégorie',
+    budgetName: 'Nom du budget',
+    budgetNote: 'Commentaire',
+    budgetNotePlaceholder: 'Ex. Dépassement exceptionnel lié à une réparation',
     calculator: 'Calculatrice',
     calendar: 'Calendrier',
     calendarDay: 'Dépenses et revenus du jour',
@@ -156,6 +160,7 @@ const dictionary = {
 
   en: {
     add: 'Add',
+    addComment: 'Add a comment',
     addBudget: 'Add budget',
     addGoal: 'Add goal',
     addIncome: 'Add income',
@@ -171,6 +176,9 @@ const dictionary = {
     budgetVsActual: 'Planned budget and actual spending',
     budgetAmount: 'Monthly amount',
     budgetColor: 'Category color',
+    budgetName: 'Budget name',
+    budgetNote: 'Comment',
+    budgetNotePlaceholder: 'E.g. An exceptional repair caused the overspend',
     calculator: 'Calculator',
     calendar: 'Calendar',
     calendarDay: 'Expenses and income for the day',
