@@ -138,17 +138,42 @@ app.get('/api/health', (_request, response) => response.json({ ok: true }))
 
 app.get('/api/transactions', authenticate, async (request, response, next) => {
   try {
-    const requestedMonth = request.query.month === undefined ? currentMonth() : request.query.month
-    if (typeof requestedMonth !== 'string' || !isSupportedMonth(requestedMonth)) return response.status(400).json({ error: 'INVALID_MONTH' })
-    const recurrenceSynced = await syncRecurringExpenses(request.user.uid, requestedMonth)
-    if (!recurrenceSynced) return response.status(429).json({ error: 'TRANSACTION_LIMIT_REACHED' })
-    const rows = await sql`
-      SELECT id, label, amount::float8 AS amount, type, category, expense_group AS "expenseGroup", date::text AS date, note, is_recurring AS "isRecurring", CASE WHEN is_recurring THEN EXTRACT(DAY FROM date)::int END AS "recurrenceDay"
-      FROM transactions
-      WHERE user_id = ${request.user.uid}
-      ORDER BY date DESC, created_at DESC
-      LIMIT ${MAX_TRANSACTIONS_PER_RESPONSE}
-    `
+    const startMonth = request.query.startMonth
+    const endMonth = request.query.endMonth
+    const typeFilter = request.query.type === undefined ? null : request.query.type
+    const searchTerm = typeof request.query.search === 'string' ? request.query.search.trim() : ''
+    if ((startMonth === undefined) !== (endMonth === undefined)) return response.status(400).json({ error: 'INVALID_MONTH_RANGE' })
+    if (startMonth !== undefined && (typeof startMonth !== 'string' || typeof endMonth !== 'string' || !isSupportedMonth(startMonth) || !isSupportedMonth(endMonth))) return response.status(400).json({ error: 'INVALID_MONTH' })
+    if (typeFilter !== null && typeFilter !== 'income' && typeFilter !== 'expense') return response.status(400).json({ error: 'INVALID_TRANSACTION_TYPE' })
+    if (searchTerm.length > 120) return response.status(400).json({ error: 'INVALID_SEARCH' })
+    const firstMonth = startMonth && endMonth ? (startMonth <= endMonth ? startMonth : endMonth) : undefined
+    const lastMonth = startMonth && endMonth ? (startMonth <= endMonth ? endMonth : startMonth) : undefined
+    if (firstMonth && lastMonth) {
+      const months = []
+      for (let month = firstMonth; month <= lastMonth && months.length < 25; month = shiftMonthValue(month, 1)) months.push(month)
+      if (months.length === 25 && months.at(-1) !== lastMonth) return response.status(400).json({ error: 'MONTH_RANGE_TOO_LARGE' })
+      for (const month of months) {
+        const recurrenceSynced = await syncRecurringExpenses(request.user.uid, month)
+        if (!recurrenceSynced) return response.status(429).json({ error: 'TRANSACTION_LIMIT_REACHED' })
+      }
+    } else {
+      const recurrenceSynced = await syncRecurringExpenses(request.user.uid, currentMonth())
+      if (!recurrenceSynced) return response.status(429).json({ error: 'TRANSACTION_LIMIT_REACHED' })
+    }
+    const selectTransactions = firstMonth && lastMonth
+      ? sql`
+        SELECT id, label, amount::float8 AS amount, type, category, expense_group AS "expenseGroup", date::text AS date, note, is_recurring AS "isRecurring", CASE WHEN is_recurring THEN EXTRACT(DAY FROM date)::int END AS "recurrenceDay"
+        FROM transactions WHERE user_id = ${request.user.uid} AND date >= ${`${firstMonth}-01`}::date AND date < ${`${shiftMonthValue(lastMonth, 1)}-01`}::date
+          AND (${typeFilter}::text IS NULL OR type = ${typeFilter}) AND (${searchTerm || null}::text IS NULL OR POSITION(LOWER(${searchTerm}) IN LOWER(label)) > 0)
+        ORDER BY date DESC, created_at DESC LIMIT ${MAX_TRANSACTIONS_PER_RESPONSE}
+      `
+      : sql`
+        SELECT id, label, amount::float8 AS amount, type, category, expense_group AS "expenseGroup", date::text AS date, note, is_recurring AS "isRecurring", CASE WHEN is_recurring THEN EXTRACT(DAY FROM date)::int END AS "recurrenceDay"
+        FROM transactions WHERE user_id = ${request.user.uid}
+          AND (${typeFilter}::text IS NULL OR type = ${typeFilter}) AND (${searchTerm || null}::text IS NULL OR POSITION(LOWER(${searchTerm}) IN LOWER(label)) > 0)
+        ORDER BY date DESC, created_at DESC LIMIT ${MAX_TRANSACTIONS_PER_RESPONSE}
+      `
+    const rows = await selectTransactions
     return response.json(rows)
   } catch (error) {
     return next(error)
@@ -415,11 +440,36 @@ app.delete('/api/goals/:id', authenticate, async (request, response, next) => {
   } catch (error) { return next(error) }
 })
 
+async function calculateAutomaticOpeningBalance(uid, month) {
+  const [latestManual] = await sql`
+    SELECT month, opening_balance::float8 AS "openingBalance"
+    FROM monthly_balances WHERE user_id = ${uid} AND month < ${month}
+    ORDER BY month DESC LIMIT 1
+  `
+  const totals = latestManual
+    ? await sql`
+      SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8 AS balance
+      FROM transactions WHERE user_id = ${uid} AND date >= ${`${latestManual.month}-01`}::date AND date < ${`${month}-01`}::date
+    `
+    : await sql`
+      SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0)::float8 AS balance
+      FROM transactions WHERE user_id = ${uid} AND date < ${`${month}-01`}::date
+    `
+  return Number(latestManual?.openingBalance || 0) + Number(totals[0]?.balance || 0)
+}
+
+async function resolveOpeningBalance(uid, month) {
+  const [saved, automaticOpeningBalance] = await Promise.all([
+    sql`SELECT opening_balance::float8 AS "openingBalance" FROM monthly_balances WHERE user_id = ${uid} AND month = ${month}`,
+    calculateAutomaticOpeningBalance(uid, month),
+  ])
+  return { openingBalance: saved[0]?.openingBalance ?? automaticOpeningBalance, automaticOpeningBalance, isManual: Boolean(saved[0]) }
+}
+
 app.get('/api/monthly-balances/:month', authenticate, async (request, response, next) => {
   if (!isSupportedMonth(request.params.month)) return response.status(400).json({ error: 'INVALID_MONTH' })
   try {
-    const rows = await sql`SELECT opening_balance::float8 AS "openingBalance" FROM monthly_balances WHERE user_id = ${request.user.uid} AND month = ${request.params.month}`
-    return response.json(rows[0] || { openingBalance: 0 })
+    return response.json(await resolveOpeningBalance(request.user.uid, request.params.month))
   } catch (error) { return next(error) }
 })
 
@@ -434,6 +484,34 @@ app.put('/api/monthly-balances/:month', authenticate, async (request, response, 
       RETURNING opening_balance::float8 AS "openingBalance"
     `
     return response.json(rows[0])
+  } catch (error) { return next(error) }
+})
+
+app.delete('/api/monthly-balances/:month', authenticate, async (request, response, next) => {
+  if (!isSupportedMonth(request.params.month)) return response.status(400).json({ error: 'INVALID_MONTH' })
+  try {
+    await sql`DELETE FROM monthly_balances WHERE user_id = ${request.user.uid} AND month = ${request.params.month}`
+    return response.json(await resolveOpeningBalance(request.user.uid, request.params.month))
+  } catch (error) { return next(error) }
+})
+
+app.post('/api/monthly-balances/:month/move-to-goal', authenticate, async (request, response, next) => {
+  const amount = Number(request.body?.amount)
+  const goalId = request.body?.goalId
+  if (!isSupportedMonth(request.params.month) || typeof goalId !== 'string' || !/^[a-z0-9-]{1,80}$/i.test(goalId) || !Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) return response.status(400).json({ error: 'INVALID_SAVINGS_TRANSFER' })
+  try {
+    const [goals] = await sql.transaction((transaction) => [
+      transaction`
+        UPDATE goals SET saved = saved + ${amount} WHERE id = ${goalId} AND user_id = ${request.user.uid}
+        RETURNING id, name, target::float8 AS target, saved::float8 AS saved, due_date::text AS "dueDate", icon
+      `,
+      transaction`
+        INSERT INTO monthly_balances (user_id, month, opening_balance) VALUES (${request.user.uid}, ${request.params.month}, 0)
+        ON CONFLICT (user_id, month) DO UPDATE SET opening_balance = 0, updated_at = NOW()
+      `,
+    ])
+    if (!goals[0]) return response.status(404).json({ error: 'GOAL_NOT_FOUND' })
+    return response.json({ goal: goals[0], openingBalance: 0 })
   } catch (error) { return next(error) }
 })
 

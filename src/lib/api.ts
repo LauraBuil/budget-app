@@ -1,6 +1,8 @@
 import { auth } from './firebase'
 import type { Budget, BudgetDraft, Category, Goal, GoalDraft, Transaction, TransactionDraft } from '../types'
 
+export interface TransactionsQuery { type?: Transaction['type'] | 'all'; search?: string }
+
 async function authorizedRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = await auth?.currentUser?.getIdToken()
   if (!token) throw new Error('AUTH_REQUIRED')
@@ -13,7 +15,14 @@ async function authorizedRequest<T>(url: string, options: RequestInit = {}): Pro
   return response.json() as Promise<T>
 }
 
-export const getTransactions = (month?: string) => authorizedRequest<Transaction[]>(`/api/transactions${month ? `?month=${encodeURIComponent(month)}` : ''}`)
+export const getTransactions = (startMonth?: string, endMonth?: string, filters: TransactionsQuery = {}) => {
+  const query = new URLSearchParams()
+  if (startMonth) query.set('startMonth', startMonth)
+  if (endMonth) query.set('endMonth', endMonth)
+  if (filters.type && filters.type !== 'all') query.set('type', filters.type)
+  if (filters.search?.trim()) query.set('search', filters.search.trim())
+  return authorizedRequest<Transaction[]>(`/api/transactions${query.size ? `?${query}` : ''}`)
+}
 export const createTransaction = (transaction: TransactionDraft) => authorizedRequest<Transaction>('/api/transactions', {
   method: 'POST',
   body: JSON.stringify(transaction),
@@ -36,5 +45,8 @@ export const getGoals = () => authorizedRequest<Goal[]>('/api/goals')
 export const createGoal = (goal: GoalDraft) => authorizedRequest<Goal>('/api/goals', { method: 'POST', body: JSON.stringify(goal) })
 export const updateGoal = (id: string, goal: GoalDraft) => authorizedRequest<Goal>(`/api/goals/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(goal) })
 export const deleteGoal = (id: string) => authorizedRequest<void>(`/api/goals/${encodeURIComponent(id)}`, { method: 'DELETE' })
-export const getOpeningBalance = (month: string) => authorizedRequest<{ openingBalance: number }>(`/api/monthly-balances/${encodeURIComponent(month)}`)
+export interface OpeningBalance { openingBalance: number; automaticOpeningBalance: number; isManual: boolean }
+export const getOpeningBalance = (month: string) => authorizedRequest<OpeningBalance>(`/api/monthly-balances/${encodeURIComponent(month)}`)
 export const saveOpeningBalance = (month: string, openingBalance: number) => authorizedRequest<{ openingBalance: number }>(`/api/monthly-balances/${encodeURIComponent(month)}`, { method: 'PUT', body: JSON.stringify({ openingBalance }) })
+export const restoreOpeningBalance = (month: string) => authorizedRequest<OpeningBalance>(`/api/monthly-balances/${encodeURIComponent(month)}`, { method: 'DELETE' })
+export const moveOpeningBalanceToGoal = (month: string, goalId: string, amount: number) => authorizedRequest<{ goal: Goal; openingBalance: number }>(`/api/monthly-balances/${encodeURIComponent(month)}/move-to-goal`, { method: 'POST', body: JSON.stringify({ goalId, amount }) })
