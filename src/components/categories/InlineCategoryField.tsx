@@ -1,60 +1,65 @@
-import { Check, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { ChevronDown, Plus } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { useApp } from '../../context/AppContext'
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../lib/categoryGroups'
+import { categoryOptions } from '../../lib/categoryOptions'
 import type { ExpenseGroup, TransactionType } from '../../types'
+import { useCommitOnOutsidePress } from '../ui/useCommitOnOutsidePress'
+import { EditableCategoryOption } from './EditableCategoryOption'
 
 interface InlineCategoryFieldProps {
   type: TransactionType
   expenseGroup: ExpenseGroup
   value: string
-  onChange: (value: string) => void
+  onChange: (value: string, group?: ExpenseGroup) => void | Promise<void>
+  compact?: boolean
 }
 
-const CREATE_VALUE = '__create__'
-
-export function InlineCategoryField({ type, expenseGroup, value, onChange }: InlineCategoryFieldProps) {
+export function InlineCategoryField({ type, expenseGroup, value, onChange, compact = false }: InlineCategoryFieldProps) {
   const { t, categories, addCategory } = useApp()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState('')
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const busy = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const options = useMemo(() => categoryOptions(categories,t,type), [categories,t,type])
+  const selected = options.find((option) => option.slugs.includes(value))?.label || value
+  const filtered = options.filter((option) => option.label.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+  useCommitOnOutsidePress(open, containerRef, () => {
+    const focused = document.activeElement
+    // Commit a renamed category before unmounting its input (also on touch).
+    if (focused instanceof HTMLInputElement && containerRef.current?.contains(focused)) focused.blur()
+    setOpen(false)
+  })
 
-  const builtIn = useMemo(() => (
-    type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES.filter((item) => item.group === expenseGroup)
-  ), [type, expenseGroup])
-  const custom = useMemo(() => categories.filter((item) => item.type === type && (type === 'income' || item.group === expenseGroup)), [categories, expenseGroup, type])
-
-  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
-
-  function cancel() {
-    setEditing(false)
-    setName('')
+  async function select(slug: string) {
+    if (busy.current) return
+    busy.current = true; setSaving(true)
+    try { await onChange(slug); setOpen(false) }
+    catch { /* The shared toast displays the request error. */ }
+    finally { busy.current = false; setSaving(false) }
   }
-
-  async function save() {
-    if (!name.trim() || saving) return
-    setSaving(true)
+  async function create() {
+    if (!search.trim() || busy.current) return
+    busy.current = true; setSaving(true)
     try {
-      const category = await addCategory(name, type === 'income' ? 'daily' : expenseGroup, type)
-      onChange(category.slug)
-      cancel()
-    } finally {
-      setSaving(false)
-    }
+      const category = await addCategory(search.trim(),expenseGroup,type)
+      await onChange(category.slug)
+      setSearch(''); setOpen(false)
+    } catch { /* Keep the search text so the user can retry. */ }
+    finally { busy.current = false; setSaving(false) }
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Escape') cancel()
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      void save()
-    }
-  }
-
-  if (editing) {
-    return <div className="inline-category-field"><input ref={inputRef} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={onKeyDown} placeholder={t('categoryName')} aria-label={t('categoryName')} maxLength={60}/><button type="button" onClick={() => void save()} disabled={saving} aria-label={t('add')}><Check size={16}/></button><button type="button" onClick={cancel} aria-label={t('cancel')}><X size={16}/></button></div>
-  }
-
-  return <select name="category" value={value} aria-label={t('category')} onChange={(event) => event.target.value === CREATE_VALUE ? setEditing(true) : onChange(event.target.value)}><optgroup label={type === 'income' ? t('income') : t('expenses')}>{builtIn.map((item) => <option key={item.slug} value={item.slug}>{t(item.labelKey)}</option>)}{custom.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}</optgroup><option value={CREATE_VALUE}>＋ {t('customCategory')}</option></select>
+  return <div className={`category-selector${compact ? ' category-selector--compact' : ''}`} ref={containerRef}>
+    <button type="button" className="category-selector__trigger" onClick={() => { setOpen(!open); setSearch('') }} aria-label={t('category')} aria-expanded={open}>{selected}<ChevronDown size={16}/></button>
+    {open && <div className="category-selector__menu">
+      <input className="category-selector__input" aria-label={t('categoryName')} placeholder={t('searchOrCreateCategory')} value={search} maxLength={60} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if(event.key==='Enter') { event.preventDefault(); if(filtered.length===1) void select(filtered[0].slugs.includes(value) ? value : filtered[0].slugs[0]); else if(!filtered.length) void create() } }}/>
+      {filtered.map((option) => {
+        const custom = categories.find((category) => category.type===type && option.slugs.includes(category.slug))
+        const slug = option.slugs.includes(value) ? value : option.slugs[0]
+        return custom ? <EditableCategoryOption key={option.label} category={custom} selected={option.slugs.includes(value)} onSelect={() => void select(custom.slug)}/>
+          : <button type="button" key={option.label} className={option.slugs.includes(value) ? 'selected' : ''} disabled={saving} onClick={() => void select(slug)}>{option.label}</button>
+      })}
+      {search.trim() && !options.some((option) => option.label.toLocaleLowerCase()===search.trim().toLocaleLowerCase()) && <button type="button" className="category-selector__create" disabled={saving} onClick={() => void create()}><Plus size={15}/>{t('add')} « {search.trim()} »</button>}
+    </div>}
+  </div>
 }

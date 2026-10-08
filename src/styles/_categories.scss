@@ -5,3 +5,28 @@
 .inline-category-field button { display: grid; place-items: center; border: 1px solid $line; border-radius: 9px; color: $text; background: $surface-subtle; cursor: pointer; }
 .inline-category-field button:hover { background: $accent-soft; }
 .inline-category-field button:disabled { opacity: .55; cursor: wait; }
+.category-selector { position: relative; }
+.category-selector__trigger { width: 100%; min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: .6rem; border: 1px solid $line; border-radius: 9px; color: $text; background: $surface-subtle; padding: .7rem; cursor: pointer; text-align: left; }
+.category-selector__menu { position: absolute; z-index: 30; top: calc(100% + .35rem); left: 0; right: 0; max-height: 260px; overflow-y: auto; display: grid; gap: .2rem; padding: .45rem; border: 1px solid $line; border-radius: 10px; background: $surface-solid; box-shadow: $shadow; }
+.category-selector__menu > button, .category-selector__custom > button { min-height: 34px; border: 0; border-radius: 7px; color: $text; background: transparent; cursor: pointer; text-align: left; }
+.category-selector__menu > button { padding: .45rem .55rem; }
+.category-selector__menu > button:hover, .category-selector__menu > button.selected, .category-selector__custom > button:first-child:hover, .category-selector__custom > button:first-child.selected { background: $accent-soft; }
+.category-selector__custom { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: .2rem; align-items: center; }
+.category-selector__custom > button:not(:first-child) { display: grid; place-items: center; padding: 0; text-align: center; }
+.category-selector__name { display: inline-block; width: max-content; max-width: 100%; cursor: text; }
+.form-grid .category-selector__input { min-width: 0; min-height: 32px; height: 32px; padding: .2rem .45rem; }
+.category-selector__create { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; margin-top: .15rem; color: $accent-strong !important; text-align: center !important; }
+.category-selector--compact { display: inline-flex; vertical-align: baseline; }
+.category-selector--compact .category-selector__trigger { width: auto; min-height: 0; border: 0; border-radius: 0; background: transparent; padding: 0; color: $muted; font-size: inherit; }
+.category-selector--compact .category-selector__menu { width: min(240px, calc(100vw - 2rem)); }
+.category-selector .category-selector__input { width: 100%; min-width: 0; height: 32px; min-height: 32px; border: 1px solid $line; border-radius: 6px; padding: .2rem .45rem; background: $surface-subtle; color: $text; }
+.category-option { display: flex; align-items: center; min-width: 0; border-radius: 7px; }
+.category-option:hover, .category-option.selected { background: $accent-soft; }
+.category-option button { border: 0; background: transparent; color: $text; cursor: pointer; min-height: 34px; padding: .3rem; }
+.category-option__name { flex: 0 1 auto; text-align: left; overflow-wrap: anywhere; }
+.category-option__select { flex: 1 0 28px; align-self: stretch; }
+.category-option__delete { flex: 0 0 30px; display: grid; place-items: center; }
+.category-option .category-selector__input { flex: 1; }
+@media (max-width: 600px) {
+  .category-selector--compact .category-selector__menu { position: fixed; top: auto; bottom: 1rem; left: 1rem; right: 1rem; width: auto; max-height: min(55vh, 320px); z-index: 90; }
+}

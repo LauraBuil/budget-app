@@ -1,4 +1,5 @@
 import { formatCurrency } from '../lib/format'
+import { groupCategoryTotals } from '../lib/groupCategoryTotals'
 import { useState, type MouseEvent } from 'react'
 import type { CategoryTotal } from '../lib/financialData'
 import type { Language } from '../types'
@@ -10,8 +11,9 @@ interface CategoryBreakdownChartProps {
   centerLabel: string
 }
 
-export function CategoryBreakdownChart({ data, language, categoryName, centerLabel }: CategoryBreakdownChartProps) {
+export function CategoryBreakdownChart({ data: categoryTotals, language, categoryName, centerLabel }: CategoryBreakdownChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const data = groupCategoryTotals(categoryTotals, categoryName)
   if (!data.length) return <p className="chart-empty">{language === 'fr' ? 'Aucune donnée pour cette période.' : 'No data for this period.'}</p>
   const total = data.reduce((sum, item) => sum + item.amount, 0)
   let progress = 0

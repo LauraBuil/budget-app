@@ -1,3 +1,6 @@
+import type { IconId } from '../lib/icons'
+
+export type { IconId }
 export type Language = 'fr' | 'en'
 export type Theme = 'light' | 'dark'
 export type TransactionType = 'income' | 'expense'
@@ -21,11 +24,15 @@ export interface Transaction {
   note?: string
   isRecurring?: boolean
   recurrenceDay?: number
+  recurringId?: string | null
   expenseGroup?: ExpenseGroup
+  icon: IconId
 }
 
 export interface TransactionDraft extends Omit<Transaction, 'id'> {
   recurrence?: { day: number } | null
+  scope?: 'this' | 'future'
+  clientRequestId?: string
 }
 
 export interface Budget {
@@ -36,9 +43,10 @@ export interface Budget {
   spent: number
   color: string
   note: string
+  icon: IconId
 }
 
-export type BudgetDraft = Pick<Budget, 'name' | 'category' | 'limit' | 'color' | 'note'>
+export type BudgetDraft = Pick<Budget, 'name' | 'category' | 'limit' | 'color' | 'note' | 'icon'>
 
 export interface Goal {
   id: string
@@ -46,7 +54,7 @@ export interface Goal {
   target: number
   saved: number
   dueDate?: string
-  icon: 'travel' | 'tech' | 'safety'
+  icon: IconId
 }
 
 export type GoalDraft = Omit<Goal, 'id' | 'saved'> & { saved?: number }

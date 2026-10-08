@@ -19,11 +19,9 @@ export async function ensureSchema(sql) {
   await sql`ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_category_check`
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN NOT NULL DEFAULT FALSE`
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS expense_group TEXT NOT NULL DEFAULT 'daily'`
-  await sql`UPDATE transactions SET expense_group = 'fixed' WHERE category IN ('housing', 'rent', 'electricity', 'insurance', 'credit')`
-  await sql`UPDATE transactions SET expense_group = 'nonEssential' WHERE category IN ('leisure', 'dining')`
-  await sql`UPDATE transactions SET expense_group = 'unexpected' WHERE category IN ('unexpected', 'other')`
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurring_id TEXT`
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurrence_month TEXT`
+  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS icon TEXT NOT NULL DEFAULT 'other'`
   await sql`CREATE INDEX IF NOT EXISTS transactions_user_date_idx ON transactions (user_id, date DESC, created_at DESC)`
   await sql`
     CREATE TABLE IF NOT EXISTS categories (
@@ -61,6 +59,7 @@ export async function ensureSchema(sql) {
   await sql`ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'expense'`
   await sql`ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS window_start TEXT NOT NULL DEFAULT ''`
   await sql`ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS window_end TEXT NOT NULL DEFAULT ''`
+  await sql`ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS icon TEXT NOT NULL DEFAULT 'other'`
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS transactions_recurring_month_idx ON transactions (recurring_id, recurrence_month) WHERE recurring_id IS NOT NULL`
   await sql`
     CREATE TABLE IF NOT EXISTS budgets (
@@ -77,6 +76,7 @@ export async function ensureSchema(sql) {
   `
   await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '' CHECK (char_length(name) <= 80)`
   await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '' CHECK (char_length(note) <= 1000)`
+  await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS icon TEXT NOT NULL DEFAULT 'other'`
   await sql`
     CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY,
@@ -98,4 +98,6 @@ export async function ensureSchema(sql) {
       PRIMARY KEY (user_id, month)
     )
   `
+  await sql`ALTER TABLE goals DROP CONSTRAINT IF EXISTS goals_icon_check`
+  await sql`ALTER TABLE goals ALTER COLUMN icon SET DEFAULT 'other'`
 }

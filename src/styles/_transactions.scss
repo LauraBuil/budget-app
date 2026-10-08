@@ -1,0 +1,30 @@
+@use './tokens' as *;
+
+.transaction-item__actions > button { display: inline-grid; place-items: center; width: 30px; height: 32px; flex-shrink: 0; }
+.transaction-results--loading { opacity: .55; pointer-events: none; }
+.transaction-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-bottom: .75rem; }
+.transaction-sort { display: flex; align-items: center; gap: .5rem; color: $muted; font-size: $font-size-xs; }
+.transaction-sort select { max-width: 100%; min-height: 36px; border: 1px solid $line; border-radius: 8px; padding: .4rem; color: $text; background: $surface-subtle; }
+.transaction-period-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; }
+.form-hint { color: $muted; font-size: $font-size-2xs; line-height: 1.5; }
+.form-error { color: $accent-strong; }
+.recurrence-scope { display: flex; flex-wrap: wrap; gap: .65rem 1rem; border: 1px solid $line; border-radius: 10px; padding: .75rem; min-width: 0; }
+.recurrence-scope legend { padding: 0 .3rem; }
+.form-grid .recurrence-scope label, .recurrence-scope label { display: flex; flex-direction: row; align-items: center; gap: .4rem; cursor: pointer; }
+.form-grid .recurrence-scope input, .recurrence-scope input { width: 16px; height: 16px; min-height: 0; padding: 0; accent-color: $accent; }
+.recurrence-scope small { width: 100%; color: $muted; }
+.form-grid .monthly-recurrence-checkbox { display: inline-flex; flex-direction: row; align-items: center; gap: .5rem; cursor: pointer; }
+.form-grid .monthly-recurrence-checkbox input { width: 16px; height: 16px; min-height: 0; padding: 0; accent-color: $accent; }
+.monthly-recurrence-label { color: $muted; align-self: center; }
+.recurrence-stop .inline-edit-button { color: $accent-strong; text-align: left; }
+.recurrence-stop .form-hint { margin: .5rem 0 0; }
+
+@media (max-width: 600px) {
+  .transaction-filter-row > * { width: 100%; justify-content: space-between; }
+  .transactions-page .transaction-period-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .transactions-page .transaction-period-actions .button { padding: .55rem; font-size: $font-size-xs; }
+  .transactions-page .transaction-item { grid-template-columns: 36px minmax(0, 1fr); gap: .45rem .65rem; }
+  .transactions-page .transaction-item__meta { line-height: 1.6; }
+  .transactions-page .transaction-item__actions { grid-column: 2; justify-content: flex-end; gap: .35rem; }
+  .transactions-page .transaction-item__actions > button { width: 36px; height: 36px; }
+}

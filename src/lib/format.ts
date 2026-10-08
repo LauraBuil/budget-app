@@ -14,6 +14,9 @@ export const formatDate = (value: string, language: Language = 'fr') =>
     year: 'numeric',
   }).format(new Date(`${value}T12:00:00`))
 
+export const capitalizeFirst = (value: string, language: Language = 'fr') =>
+  value ? `${value.charAt(0).toLocaleUpperCase(language === 'fr' ? 'fr-FR' : 'en-GB')}${value.slice(1)}` : value
+
 const monthLabels: Record<Language, Record<string, string>> = {
   fr: { May: 'Mai', Jun: 'Juin', Jul: 'Juil.', Aug: 'Août', Sep: 'Sept.', Oct: 'Oct.' },
   en: { May: 'May', Jun: 'Jun', Jul: 'Jul', Aug: 'Aug', Sep: 'Sep', Oct: 'Oct' },
