@@ -13,6 +13,8 @@ import { transactionService, TransactionError } from './transactions/service.mjs
 import { resolveBalance, transferToSavings } from './transactions/balances.mjs'
 import { buildTransactionListQuery } from './transactions/list-query.mjs'
 import { validateTransaction } from './transactions/validation.mjs'
+import { describeAuthClaims, evaluateAuthClaims, parseBlockedEmailDomains } from './auth-policy.mjs'
+import { claimsFromFirebaseAccount } from './firebase-account.mjs'
 
 dotenv.config({ path: '.env.local' })
 
@@ -20,9 +22,13 @@ const port = Number(process.env.API_PORT || 8787)
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
 const databaseUrl = process.env.DATABASE_URL
 const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID
+const firebaseApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY
+const defaultBlockedEmailDomains = 'mailinator.com,guerrillamail.com,sharklasers.com,grr.la,10minutemail.com,temp-mail.org,yopmail.com,mx-mailsrv.com,ruutukf.com'
+const blockedEmailDomains = parseBlockedEmailDomains(`${defaultBlockedEmailDomains},${process.env.BLOCKED_EMAIL_DOMAINS || ''}`)
 
 if (!databaseUrl) throw new Error('DATABASE_URL is missing from .env.local')
 if (!firebaseProjectId) throw new Error('FIREBASE_PROJECT_ID is missing from .env.local')
+if (!firebaseApiKey) throw new Error('FIREBASE_API_KEY or VITE_FIREBASE_API_KEY is missing from .env.local')
 
 const sql = neon(databaseUrl)
 const firebaseKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'))
@@ -50,22 +56,52 @@ async function syncRecurringExpenses(uid, month = currentMonth()) {
   return true
 }
 
-async function authenticate(request, response, next) {
+async function readFirebaseClaims(request) {
   const header = request.headers.authorization
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null
-  if (!token) return response.status(401).json({ error: 'AUTH_REQUIRED' })
+  if (!token) return { error: 'AUTH_REQUIRED', status: 401 }
 
   try {
     const { payload } = await jwtVerify(token, firebaseKeys, { issuer: firebaseIssuer, audience: firebaseProjectId })
-    if (typeof payload.sub !== 'string' || !payload.sub) return response.status(401).json({ error: 'AUTH_INVALID' })
-    request.user = { uid: payload.sub }
-    return next()
-  } catch {
-    return response.status(401).json({ error: 'AUTH_INVALID' })
+    if (typeof payload.sub !== 'string' || !payload.sub) return { error: 'AUTH_INVALID', status: 401 }
+    const accountResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseApiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: token }),
+      signal: AbortSignal.timeout(5_000),
+    })
+    const accountData = await accountResponse.json().catch(() => null)
+    if (!accountResponse.ok) {
+      const providerCode = accountData?.error?.message
+      if (providerCode === 'USER_DISABLED') return { error: 'AUTH_ACCOUNT_DISABLED', status: 403 }
+      if (accountResponse.status >= 500 || accountResponse.status === 429) return { error: 'AUTH_PROVIDER_UNAVAILABLE', status: 503 }
+      return { error: 'AUTH_INVALID', status: 401 }
+    }
+    return claimsFromFirebaseAccount(payload, accountData?.users?.[0])
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError' || error instanceof TypeError) {
+      return { error: 'AUTH_PROVIDER_UNAVAILABLE', status: 503 }
+    }
+    return { error: 'AUTH_INVALID', status: 401 }
   }
 }
 
+async function authenticate(request, response, next) {
+  const identity = await readFirebaseClaims(request)
+  if (!identity.payload) return response.status(identity.status).json({ error: identity.error })
+  const decision = evaluateAuthClaims(identity.payload, blockedEmailDomains)
+  if (!decision.allowed) return response.status(decision.status).json({ error: decision.code })
+  request.user = { uid: decision.uid, email: decision.email }
+  return next()
+}
+
 app.get('/api/health', (_request, response) => response.json({ ok: true }))
+
+app.get('/api/auth/session', async (request, response) => {
+  const identity = await readFirebaseClaims(request)
+  if (!identity.payload) return response.status(identity.status).json({ error: identity.error })
+  return response.json(describeAuthClaims(identity.payload, blockedEmailDomains))
+})
 
 app.get('/api/transactions', authenticate, async (request, response, next) => {
   try {

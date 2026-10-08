@@ -23,6 +23,8 @@ export async function ensureSchema(sql) {
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurrence_month TEXT`
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS icon TEXT NOT NULL DEFAULT 'other'`
   await sql`CREATE INDEX IF NOT EXISTS transactions_user_date_idx ON transactions (user_id, date DESC, created_at DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS transactions_user_category_date_idx ON transactions (user_id, category, date DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS transactions_user_group_date_idx ON transactions (user_id, expense_group, date DESC) WHERE type = 'expense'`
   await sql`
     CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,

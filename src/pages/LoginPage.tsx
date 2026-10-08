@@ -2,11 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { AuthPageLayout } from '../components/auth/AuthPageLayout'
+import { GoogleIcon } from '../components/icons/GoogleIcon'
 import { Button } from '../components/ui/Button'
 import { useApp } from '../context/AppContext'
 
 export function LoginPage() {
-  const { t, login, user, isAuthReady } = useApp()
+  const { t, login, loginWithGoogle, user, isAuthReady } = useApp()
   const [register, setRegister] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -25,6 +26,17 @@ export function LoginPage() {
     finally { setLoading(false) }
   }
 
+  async function onGoogleSignIn() {
+    setLoading(true)
+    setError('')
+    try { await loginWithGoogle() }
+    catch (cause) {
+      if (cause instanceof Error && cause.message.includes('popup-closed-by-user')) return
+      setError(cause instanceof Error && cause.message === 'FIREBASE_NOT_CONFIGURED' ? t('demoNotice') : t('cannotConnectWithGoogle'))
+    }
+    finally { setLoading(false) }
+  }
+
   return (
     <AuthPageLayout>
       <form className="login-card" onSubmit={onSubmit}>
@@ -34,6 +46,8 @@ export function LoginPage() {
           {!register && <Link className="forgot-password-link" to="/forgot-password">{t('forgotPassword')}</Link>}
           {error && <p className="form-error">{error}</p>}
           <Button type="submit" disabled={loading}>{register ? t('createAccount') : t('signIn')}</Button>
+          <div className="auth-divider"><span>{t('or')}</span></div>
+          <Button type="button" variant="secondary" disabled={loading} onClick={onGoogleSignIn}><GoogleIcon />{t('continueWithGoogle')}</Button>
           <p className="auth-switch">{register ? t('alreadyAccount') : t('noAccount')} <button type="button" onClick={() => setRegister(!register)}>{register ? t('signIn') : t('createAccount')}</button></p>
       </form>
     </AuthPageLayout>

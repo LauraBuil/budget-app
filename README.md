@@ -8,6 +8,8 @@ Gasel est une application personnelle de gestion de budget. Firebase Authenticat
 - dépenses classées en charges fixes, dépenses fixes, dépenses non essentielles ou dépenses imprévues ;
 - dépenses et revenus récurrents sur une fenêtre glissante de six mois ;
 - catégories personnalisées créées depuis la barre de recherche ;
+- filtres combinables côté serveur par revenus/dépenses, types de dépense et catégories, avec tri chronologique ;
+- recherche côté serveur par description, date (`05/10/2026` ou `2026-10-05`), type et catégorie ;
 - modification du nom directement depuis l’accueil ;
 - thème clair/sombre, français/anglais et calculatrice disponible dans les pages connectées ;
 - authentification e-mail/mot de passe avec Firebase ;

@@ -59,14 +59,16 @@ h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0; }
 .input-with-icon input { border: 0; outline: 0; background: transparent; color: $text; width: 100%; }
 .input-with-icon button { border: 0; background: transparent; cursor: pointer; padding: .25rem; }
 .form-error, .notice { color: $accent-strong; background: $accent-soft; border-radius: 10px; padding: .75rem .9rem; font-size: $font-size-xs; }
-.divider { height: 1px; background: $line; margin: .4rem 0; text-align: center; }
-.divider span { position: relative; top: -.7rem; background: $surface-solid; color: $muted; padding: 0 .7rem; font-size: $font-size-xs; }
+.divider, .auth-divider { height: 1px; background: $line; margin: .4rem 0; text-align: center; }
+.divider span, .auth-divider span { position: relative; top: -.7rem; background: $surface-solid; color: $muted; padding: 0 .7rem; font-size: $font-size-xs; }
 .auth-switch { text-align: center; color: $muted; font-size: $font-size-xs; margin: .35rem 0 0; }
 .auth-switch button { color: $accent-strong; border: 0; background: transparent; font-weight: 600; cursor: pointer; }
 .forgot-password-link { align-self: flex-end; margin-top: -.45rem; color: $accent-strong; font-size: $font-size-xs; font-weight: 600; }
 .back-to-login { display: inline-flex; align-items: center; align-self: center; gap: .35rem; color: $muted; font-size: $font-size-xs; font-weight: 600; }
 .forgot-password-link:hover, .back-to-login:hover { color: $text; }
 .form-success { color: $text; background: color-mix(in srgb, $olive 18%, $surface-subtle); border-radius: 10px; padding: .9rem; font-size: $font-size-xs; line-height: 1.5; }
+.account-status-card__email { display: block; overflow-wrap: anywhere; color: $text; font-size: $font-size-sm; }
+.account-status-card__actions { display: grid; gap: .7rem; }
 .preference-controls { display: flex; align-items: center; gap: .5rem; }
 .preference-controls--floating { position: fixed; top: 1rem; right: 1.25rem; z-index: 40; padding: .22rem; border-radius: 12px; background: color-mix(in srgb, $surface-solid 84%, transparent); box-shadow: 0 8px 22px rgba(69, 45, 39, .08); backdrop-filter: blur(14px); }
 .preference-controls--compact { position: absolute; top: 2rem; right: 2rem; }

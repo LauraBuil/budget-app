@@ -1,14 +1,18 @@
 import {createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react'
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
+  reload,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile
 } from 'firebase/auth'
 import {auth, isFirebaseConfigured} from '../lib/firebase'
-import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
+import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getAuthSession, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
 import {translate, type TranslationKey} from '../lib/i18n'
 import { useToast } from './ToastContext'
 import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, TransactionDraft, TransactionType, UserProfile} from '../types'
@@ -24,6 +28,9 @@ interface AppContextValue {
   setLanguage: (language: Language) => void
   setTheme: (theme: Theme) => void
   login: (email: string, password: string, register?: boolean) => Promise<void>
+  loginWithGoogle: () => Promise<void>
+  resendVerificationEmail: () => Promise<void>
+  refreshEmailVerification: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   updateDisplayName: (displayName: string) => Promise<void>
   addCategory: (name: string, group: ExpenseGroup, type: TransactionType) => Promise<Category>
@@ -48,6 +55,11 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 const emptyAccountData: AppData = { transactions: [], budgets: [], goals: [], history: [] }
+function accessErrorFrom(results: PromiseSettledResult<unknown>[]) {
+  return results.find((result) => result.status === 'rejected'
+    && result.reason instanceof Error
+    && result.reason.message.startsWith('AUTH_'))
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast()
@@ -108,10 +120,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsAuthReady(true)
         return
       }
-      const nextUser = { uid: firebaseUser.uid, email: firebaseUser.email || '', displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Gasel' }
-      void Promise.allSettled([getTransactions(), getCategories(), getBudgets(), getGoals()])
-        .then(([transactionsResult, categoriesResult, budgetsResult, goalsResult]) => {
+      const profile = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Gasel',
+      }
+
+      if (!firebaseUser.emailVerified) {
+        setUser({ ...profile, access: 'verificationRequired' })
+        setIsAuthReady(true)
+        return
+      }
+
+      void getAuthSession()
+        .then(async (session) => {
           if (auth?.currentUser?.uid !== firebaseUser.uid || authEpoch.current !== epoch) return
+          if (!session.emailVerified) {
+            setUser({ ...profile, access: 'verificationRequired' })
+            return
+          }
+          if (!session.emailAllowed) {
+            setUser({ ...profile, access: 'emailDomainBlocked' })
+            return
+          }
+
+          const [transactionsResult, categoriesResult, budgetsResult, goalsResult] = await Promise.allSettled([getTransactions(), getCategories(), getBudgets(), getGoals()])
+          if (auth?.currentUser?.uid !== firebaseUser.uid || authEpoch.current !== epoch) return
+          const authFailure = accessErrorFrom([transactionsResult, categoriesResult, budgetsResult, goalsResult])
+          if (authFailure?.status === 'rejected') {
+            if (authFailure.reason.message === 'AUTH_EMAIL_UNVERIFIED') setUser({ ...profile, access: 'verificationRequired' })
+            else if (authFailure.reason.message === 'AUTH_EMAIL_DOMAIN_BLOCKED') setUser({ ...profile, access: 'emailDomainBlocked' })
+            else await firebaseSignOut(auth)
+            return
+          }
           if (transactionsResult.status === 'fulfilled') setData((current) => ({ ...current, transactions: transactionsResult.value }))
           else console.error('Unable to load transactions', transactionsResult.reason instanceof Error ? transactionsResult.reason.message : 'Unknown error')
           if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value)
@@ -120,7 +161,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             budgets: budgetsResult.status === 'fulfilled' ? budgetsResult.value : current.budgets,
             goals: goalsResult.status === 'fulfilled' ? goalsResult.value : current.goals,
           }))
-          setUser(nextUser)
+          setUser({ ...profile, access: 'granted' })
+        })
+        .catch(async (error) => {
+          console.error('Unable to validate account access', error instanceof Error ? error.message : 'Unknown error')
+          if (auth?.currentUser?.uid === firebaseUser.uid && authEpoch.current === epoch) await firebaseSignOut(auth)
         })
         .finally(() => {
           if (auth?.currentUser?.uid === firebaseUser.uid && authEpoch.current === epoch) setIsAuthReady(true)
@@ -133,7 +178,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const result = register
       ? await createUserWithEmailAndPassword(auth, email, password)
       : await signInWithEmailAndPassword(auth, email, password)
+    if (register) {
+      auth.languageCode = language
+      await sendEmailVerification(result.user, { url: `${window.location.origin}/login` })
+    }
     await result.user.getIdToken()
+  }, [language])
+
+  const loginWithGoogle = useCallback(async () => {
+    if (!auth || !isFirebaseConfigured) throw new Error('FIREBASE_NOT_CONFIGURED')
+    const result = await signInWithPopup(auth, new GoogleAuthProvider())
+    await result.user.getIdToken()
+  }, [])
+
+  const resendVerificationEmail = useCallback(async () => {
+    if (!auth?.currentUser) throw new Error('AUTH_REQUIRED')
+    auth.languageCode = language
+    await sendEmailVerification(auth.currentUser, { url: `${window.location.origin}/login` })
+    showToast(translate(language, 'verificationEmailSent'))
+  }, [language, showToast])
+
+  const refreshEmailVerification = useCallback(async () => {
+    const firebaseUser = auth?.currentUser
+    if (!firebaseUser) throw new Error('AUTH_REQUIRED')
+    await reload(firebaseUser)
+    if (!firebaseUser.emailVerified) throw new Error('EMAIL_NOT_VERIFIED')
+    await firebaseUser.getIdToken(true)
+    window.location.assign('/')
   }, [])
 
   const resetPassword = useCallback(async (email: string) => {
@@ -295,8 +366,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     data, categories, user, isAuthReady, language, theme,
-    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal,
-  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal])
+    t: (key) => translate(language, key), setLanguage, setTheme, login, loginWithGoogle, resendVerificationEmail, refreshEmailVerification, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal,
+  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, loginWithGoogle, resendVerificationEmail, refreshEmailVerification, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
