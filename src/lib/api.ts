@@ -2,6 +2,7 @@ import { auth } from './firebase'
 import type { Budget, BudgetDraft, Category, Goal, GoalDraft, Transaction, TransactionDraft } from '../types'
 
 export interface TransactionsQuery { type?: Transaction['type'] | 'all'; search?: string; category?: string; categories?: string[]; expenseGroups?: string[]; sort?: 'asc' | 'desc' }
+export interface AuthSession { emailVerified: boolean; emailAllowed: boolean }
 
 async function authorizedRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = await auth?.currentUser?.getIdToken()
@@ -21,6 +22,8 @@ async function authorizedRequest<T>(url: string, options: RequestInit = {}): Pro
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
+
+export const getAuthSession = () => authorizedRequest<AuthSession>('/api/auth/session')
 
 export const getTransactions = async (startMonth?: string, endMonth?: string, filters: TransactionsQuery = {}) => {
   const query = new URLSearchParams()

@@ -8,7 +8,7 @@
     "dev:client": "vite --host 0.0.0.0",
     "dev:api": "node server/index.mjs",
     "build": "tsc -b && vite build",
-    "test:security": "node server/months.test.mjs && node server/security.test.mjs",
+    "test:security": "node server/months.test.mjs && node server/auth-policy.test.mjs && node server/firebase-account.test.mjs && node server/security.test.mjs",
     "test:recurrence": "node server/transactions/service.test.mjs",
     "test:filters": "node server/transactions/list-query.test.mjs",
     "db:migrate": "node server/migrate.mjs",
