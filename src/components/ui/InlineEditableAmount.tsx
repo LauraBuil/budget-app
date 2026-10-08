@@ -19,7 +19,7 @@ export function InlineEditableAmount({ value, language, label, onSave }: { value
     const next = parseAmount(draft)
     if (next === null || next < 0) { setDraft(String(value)); setEditing(false); return }
     savingRef.current = true
-    try { await onSave(next) } finally { savingRef.current = false; setEditing(false) }
+    try { if (next !== value) await onSave(next) } catch { setDraft(String(value)) } finally { savingRef.current = false; setEditing(false) }
   }, [draft, onSave, value])
 
   useCommitOnOutsidePress(editing, containerRef, () => { void save() })

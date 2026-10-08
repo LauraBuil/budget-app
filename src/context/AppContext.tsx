@@ -8,8 +8,9 @@ import {
   updateProfile
 } from 'firebase/auth'
 import {auth, isFirebaseConfigured} from '../lib/firebase'
-import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, type TransactionsQuery, updateBudget as persistBudget, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
+import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
 import {translate, type TranslationKey} from '../lib/i18n'
+import { useToast } from './ToastContext'
 import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, TransactionDraft, TransactionType, UserProfile} from '../types'
 
 interface AppContextValue {
@@ -26,11 +27,13 @@ interface AppContextValue {
   resetPassword: (email: string) => Promise<void>
   updateDisplayName: (displayName: string) => Promise<void>
   addCategory: (name: string, group: ExpenseGroup, type: TransactionType) => Promise<Category>
-  refreshTransactions: (startMonth?: string, endMonth?: string, filters?: TransactionsQuery) => Promise<void>
+  updateCategory: (id: string, name: string) => Promise<void>
+  deleteCategory: (id: string) => Promise<void>
+  refreshTransactions: (startMonth?: string, endMonth?: string) => Promise<void>
   logout: () => Promise<void>
   addTransaction: (transaction: TransactionDraft) => Promise<void>
   updateTransaction: (id: string, transaction: TransactionDraft) => Promise<void>
-  deleteTransaction: (id: string) => Promise<void>
+  deleteTransaction: (id: string, scope?: 'this' | 'future') => Promise<void>
   addBudget: (budget: BudgetDraft) => Promise<void>
   updateBudget: (id: string, budget: BudgetDraft) => Promise<void>
   addGoal: (goal: GoalDraft) => Promise<void>
@@ -47,6 +50,7 @@ const AppContext = createContext<AppContextValue | null>(null)
 const emptyAccountData: AppData = { transactions: [], budgets: [], goals: [], history: [] }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { showToast } = useToast()
   const [language, setLanguageState] = useState<Language>(() => (localStorage.getItem('gasel-language') || 'fr') as Language)
   const [theme, setThemeState] = useState<Theme>(() => (localStorage.getItem('gasel-theme') || 'light') as Theme)
   const [user, setUser] = useState<UserProfile | null>(null)
@@ -55,6 +59,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([])
   const authEpoch = useRef(0)
   const transactionsRequestId = useRef(0)
+  const activePeriod = useRef<{ start?: string; end?: string }>({})
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -69,12 +74,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setTheme = useCallback((next: Theme) => setThemeState(next), [])
 
-  const loadTransactions = useCallback(async (startMonth?: string, endMonth?: string, filters?: TransactionsQuery) => {
+  const loadTransactions = useCallback(async (startMonth?: string, endMonth?: string) => {
     const uid = auth?.currentUser?.uid
     const epoch = authEpoch.current
     if (!uid) throw new Error('AUTH_REQUIRED')
     const requestId = ++transactionsRequestId.current
-    const transactions = await getTransactions(startMonth, endMonth, filters)
+    activePeriod.current = { start: startMonth, end: endMonth }
+    const transactions = await getTransactions(startMonth, endMonth)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch || requestId !== transactionsRequestId.current) return
     setData((current) => ({ ...current, transactions }))
   }, [])
@@ -157,7 +163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!current) return current
       return {...current, displayName: nextName}
     })
-  }, [])
+    showToast(translate(language, 'changesSaved'))
+  }, [language, showToast])
 
   const addCategory = useCallback(async (name: string, group: ExpenseGroup, type: TransactionType) => {
     const uid = auth?.currentUser?.uid
@@ -166,8 +173,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const category = await createCategory(name, group, type)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return category
     setCategories((current) => current.some((item) => item.slug === category.slug && item.type === category.type) ? current.map((item) => item.slug === category.slug && item.type === category.type ? category : item) : [...current, category])
+    showToast(translate(language, 'changesSaved'))
     return category
-  }, [])
+  }, [language, showToast])
+
+  const updateCategory = useCallback(async (id: string, name: string) => {
+    const category = await persistCategory(id, name)
+    setCategories((current) => current.map((item) => item.id === id ? category : item))
+    showToast(translate(language, 'changesSaved'))
+  }, [language, showToast])
+
+  const deleteCategory = useCallback(async (id: string) => {
+    await removeCategory(id)
+    setCategories((current) => current.filter((item) => item.id !== id))
+    showToast(translate(language, 'itemDeleted'))
+  }, [language, showToast])
 
   const addTransaction = useCallback(async (transaction: TransactionDraft) => {
     const uid = auth?.currentUser?.uid
@@ -175,9 +195,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!uid) throw new Error('AUTH_REQUIRED')
     const created = await createTransaction(transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
-    setData((current) => ({ ...current, transactions: [created, ...current.transactions] }))
-    await loadBudgets()
-  }, [loadBudgets])
+    setData((current) => ({ ...current, transactions: [created, ...current.transactions.filter((item) => item.id !== created.id)] }))
+    await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
+    showToast(translate(language, 'changesSaved'))
+  }, [loadBudgets, loadTransactions, language, showToast])
 
   const updateTransaction = useCallback(async (id: string, transaction: TransactionDraft) => {
     const uid = auth?.currentUser?.uid
@@ -186,29 +207,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = await persistTransaction(id, transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.map((item) => item.id === id ? updated : item) }))
-    await loadBudgets()
-  }, [loadBudgets])
+    await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
+    showToast(translate(language, 'changesSaved'))
+  }, [language, loadBudgets, loadTransactions, showToast])
 
-  const deleteTransaction = useCallback(async (id: string) => {
+  const deleteTransaction = useCallback(async (id: string, scope: 'this' | 'future' = 'this') => {
     const uid = auth?.currentUser?.uid
     const epoch = authEpoch.current
     if (!uid) throw new Error('AUTH_REQUIRED')
     ++transactionsRequestId.current
-    const deleted = await removeTransaction(id)
+    const deleted = await removeTransaction(id, scope)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.filter((item) => !deleted.ids.includes(item.id)) }))
-    await loadBudgets()
-  }, [loadBudgets])
+    await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
+    showToast(translate(language, 'itemDeleted'))
+  }, [language, loadBudgets, loadTransactions, showToast])
 
   const addBudget = useCallback(async (budget: BudgetDraft) => {
     const created = auth?.currentUser ? await createBudget(budget) : { ...budget, id: `budget-${Date.now()}`, spent: 0 }
-    setData((current) => ({ ...current, budgets: [...current.budgets, created] }))
+    setData((current) => ({ ...current, budgets: [...current.budgets.filter((item) => item.id !== created.id && item.category !== created.category), created] }))
   }, [])
 
   const updateBudget = useCallback(async (id: string, budget: BudgetDraft) => {
     const updated = auth?.currentUser ? await persistBudget(id, budget) : { ...budget, id, spent: data.budgets.find((item) => item.id === id)?.spent || 0 }
     setData((current) => ({ ...current, budgets: current.budgets.map((item) => item.id === id ? updated : item) }))
-  }, [data.budgets])
+    showToast(translate(language, 'changesSaved'))
+  }, [data.budgets, language, showToast])
 
   const addGoal = useCallback(async (goal: GoalDraft) => {
     const created = auth?.currentUser ? await createGoal(goal) : { ...goal, id: `goal-${Date.now()}`, saved: goal.saved || 0 }
@@ -218,17 +242,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateGoal = useCallback(async (id: string, goal: GoalDraft) => {
     const updated = auth?.currentUser ? await persistGoal(id, goal) : { ...goal, id, saved: goal.saved || 0 }
     setData((current) => ({ ...current, goals: current.goals.map((item) => item.id === id ? updated : item) }))
-  }, [])
+    showToast(translate(language, 'changesSaved'))
+  }, [language, showToast])
 
   const deleteBudget = useCallback(async (id: string) => {
     if (auth?.currentUser) await removeBudget(id)
     setData((current) => ({ ...current, budgets: current.budgets.filter((item) => item.id !== id) }))
-  }, [])
+    showToast(translate(language, 'itemDeleted'))
+  }, [language, showToast])
 
   const deleteGoal = useCallback(async (id: string) => {
     if (auth?.currentUser) await removeGoal(id)
     setData((current) => ({ ...current, goals: current.goals.filter((item) => item.id !== id) }))
-  }, [])
+    showToast(translate(language, 'itemDeleted'))
+  }, [language, showToast])
 
   const getOpeningBalance = useCallback(async (month: string) => {
     if (auth?.currentUser) return fetchOpeningBalance(month)
@@ -239,10 +266,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveOpeningBalance = useCallback(async (month: string, value: number) => {
     if (!Number.isFinite(value)) throw new Error('INVALID_BALANCE')
-    if (auth?.currentUser) return (await persistOpeningBalance(month, value)).openingBalance
+    if (auth?.currentUser) {
+      const openingBalance = (await persistOpeningBalance(month, value)).openingBalance
+      showToast(translate(language, 'changesSaved'))
+      return openingBalance
+    }
     localStorage.setItem(`gasel-opening-balance-${month}`, String(value))
+    showToast(translate(language, 'changesSaved'))
     return value
-  }, [])
+  }, [language, showToast])
 
   const restoreOpeningBalance = useCallback(async (month: string) => {
     if (auth?.currentUser) return restorePersistedOpeningBalance(month)
@@ -263,8 +295,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     data, categories, user, isAuthReady, language, theme,
-    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal,
-  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal])
+    t: (key) => translate(language, key), setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, refreshTransactions: loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal,
+  }), [data, categories, user, isAuthReady, language, theme, setLanguage, setTheme, login, resetPassword, updateDisplayName, addCategory, updateCategory, deleteCategory, loadTransactions, logout, addTransaction, updateTransaction, deleteTransaction, addBudget, updateBudget, addGoal, updateGoal, deleteBudget, deleteGoal, getOpeningBalance, saveOpeningBalance, restoreOpeningBalance, moveOpeningBalanceToGoal])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
