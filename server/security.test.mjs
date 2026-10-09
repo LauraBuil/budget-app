@@ -3,10 +3,12 @@ import { readFile } from 'node:fs/promises'
 import { buildTransactionListQuery } from './transactions/list-query.mjs'
 
 const apiEntry = await readFile(new URL('../api/[...path].mjs', import.meta.url), 'utf8')
+const authSessionEntry = await readFile(new URL('../api/auth/session.mjs', import.meta.url), 'utf8')
 const server = await readFile(new URL('./index.mjs', import.meta.url), 'utf8')
 const transactionDatabase = await readFile(new URL('./transactions/database.mjs', import.meta.url), 'utf8')
 
 assert.doesNotMatch(apiEntry, /schemaReady|await\s+schema/)
+assert.match(authSessionEntry, /server\/index\.mjs/)
 assert.ok(transactionDatabase.includes('pg_advisory_xact_lock'))
 assert.ok(transactionDatabase.includes("query('BEGIN')") && transactionDatabase.includes("query('ROLLBACK')"))
 assert.doesNotMatch(server, /WITH account_lock AS/)
