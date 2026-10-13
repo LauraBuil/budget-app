@@ -1,0 +1,46 @@
+@use './tokens' as *;
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .8rem;
+  min-height: 140px;
+  color: $muted;
+  font-size: $font-size-sm;
+}
+
+.loading-state--page {
+  min-height: 100vh;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 42%, color-mix(in srgb, $accent-soft 45%, transparent), transparent 22%), $bg;
+}
+
+.loading-state--compact { min-height: 76px; }
+
+.loading-state__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: .32rem;
+  height: 22px;
+}
+
+.loading-state__mark i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $accent;
+  animation: gasel-loading 1s ease-in-out infinite;
+}
+
+.loading-state__mark i:nth-child(2) { animation-delay: .14s; }
+.loading-state__mark i:nth-child(3) { animation-delay: .28s; }
+
+@keyframes gasel-loading {
+  0%, 60%, 100% { opacity: .38; transform: translateY(0) scale(.9); }
+  30% { opacity: 1; transform: translateY(-5px) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-state__mark i { animation: none; opacity: .75; }
+}

@@ -1,7 +1,7 @@
 @use './tokens' as *;
 
 .transaction-item__actions > button { display: inline-grid; place-items: center; width: 30px; height: 32px; flex-shrink: 0; }
-.transaction-results--loading { opacity: .55; pointer-events: none; }
+.transaction-results--loading { pointer-events: none; }
 .transaction-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-bottom: .75rem; }
 .transaction-sort { display: flex; align-items: center; gap: .5rem; color: $muted; font-size: $font-size-xs; }
 .transaction-sort select { max-width: 100%; min-height: 36px; border: 1px solid $line; border-radius: 8px; padding: .4rem; color: $text; background: $surface-subtle; }

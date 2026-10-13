@@ -9,6 +9,7 @@ const transactionDatabase = await readFile(new URL('./transactions/database.mjs'
 
 assert.doesNotMatch(apiEntry, /schemaReady|await\s+schema/)
 assert.match(authSessionEntry, /server\/index\.mjs/)
+assert.match(server, /app\.get\('\/api\/bootstrap', authenticate/)
 assert.ok(transactionDatabase.includes('pg_advisory_xact_lock'))
 assert.ok(transactionDatabase.includes("query('BEGIN')") && transactionDatabase.includes("query('ROLLBACK')"))
 assert.doesNotMatch(server, /WITH account_lock AS/)
