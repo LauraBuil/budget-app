@@ -33,7 +33,6 @@ if (!firebaseApiKey) throw new Error('FIREBASE_API_KEY or VITE_FIREBASE_API_KEY 
 const sql = neon(databaseUrl)
 const firebaseKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'))
 const firebaseIssuer = `https://securetoken.google.com/${firebaseProjectId}`
-const MAX_TRANSACTIONS_PER_USER = 50_000
 const MAX_TRANSACTIONS_PER_RESPONSE = 1_000
 const allowedIconIds = new Set(['travel', 'car', 'subscription', 'tech', 'pets', 'house', 'internet', 'credit', 'games', 'food', 'fastFood', 'rent', 'electricity', 'insurance', 'health', 'leisure', 'shopping', 'toll', 'fuel', 'safety', 'income', 'other'])
 
@@ -101,6 +100,17 @@ app.get('/api/auth/session', async (request, response) => {
   const identity = await readFirebaseClaims(request)
   if (!identity.payload) return response.status(identity.status).json({ error: identity.error })
   return response.json(describeAuthClaims(identity.payload, blockedEmailDomains))
+})
+
+app.get('/api/bootstrap', authenticate, async (request, response, next) => {
+  try {
+    const [categories, budgets, goals] = await Promise.all([
+      sql`SELECT id, name, slug, expense_group AS "group", type FROM categories WHERE user_id = ${request.user.uid} ORDER BY name ASC`,
+      budgetRows(request.user.uid),
+      goalRows(request.user.uid),
+    ])
+    return response.json({ categories, budgets, goals })
+  } catch (error) { return next(error) }
 })
 
 app.get('/api/transactions', authenticate, async (request, response, next) => {
@@ -324,6 +334,7 @@ app.put('/api/monthly-balances/:month', authenticate, async (request, response, 
   if (!isSupportedMonth(request.params.month) || !Number.isFinite(openingBalance) || Math.abs(openingBalance) > 10_000_000) return response.status(400).json({ error: 'INVALID_BALANCE' })
   try {
     const result = await withAccountTransaction(databaseUrl, request.user.uid, async (db) => {
+      // noinspection SqlNoDataSourceInspection -- the datasource is injected at runtime by Neon/Vercel.
       const { rows } = await db.query(`INSERT INTO monthly_balances (user_id,month,opening_balance) VALUES ($1,$2,$3)
         ON CONFLICT (user_id,month) DO UPDATE SET opening_balance=EXCLUDED.opening_balance,updated_at=NOW()
         RETURNING opening_balance::float8 AS "openingBalance"`, [request.user.uid,request.params.month,openingBalance])
@@ -337,6 +348,7 @@ app.delete('/api/monthly-balances/:month', authenticate, async (request, respons
   if (!isSupportedMonth(request.params.month)) return response.status(400).json({ error: 'INVALID_MONTH' })
   try {
     const result = await withAccountTransaction(databaseUrl, request.user.uid, async (db) => {
+      // noinspection SqlNoDataSourceInspection -- the datasource is injected at runtime by Neon/Vercel.
       await db.query('DELETE FROM monthly_balances WHERE user_id=$1 AND month=$2', [request.user.uid,request.params.month])
       return resolveBalance(db, request.user.uid, request.params.month)
     })

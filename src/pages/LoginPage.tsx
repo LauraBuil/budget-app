@@ -4,6 +4,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { AuthPageLayout } from '../components/auth/AuthPageLayout'
 import { GoogleIcon } from '../components/icons/GoogleIcon'
 import { Button } from '../components/ui/Button'
+import { LoadingState } from '../components/ui/LoadingState'
 import { useApp } from '../context/AppContext'
 
 export function LoginPage() {
@@ -13,7 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (!isAuthReady) return null
+  if (!isAuthReady) return <LoadingState fullPage label={t('loading')} />
   if (user) return <Navigate to="/" replace />
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {

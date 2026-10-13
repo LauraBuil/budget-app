@@ -12,10 +12,10 @@ import {
   updateProfile
 } from 'firebase/auth'
 import {auth, isFirebaseConfigured} from '../lib/firebase'
-import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getAuthSession, getBudgets, getCategories, getGoals, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
+import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBootstrapData, getBudgets, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
 import {translate, type TranslationKey} from '../lib/i18n'
 import { useToast } from './ToastContext'
-import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, TransactionDraft, TransactionType, UserProfile} from '../types'
+import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, Transaction, TransactionDraft, TransactionType, UserProfile} from '../types'
 
 interface AppContextValue {
   data: AppData
@@ -36,7 +36,7 @@ interface AppContextValue {
   addCategory: (name: string, group: ExpenseGroup, type: TransactionType) => Promise<Category>
   updateCategory: (id: string, name: string) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
-  refreshTransactions: (startMonth?: string, endMonth?: string) => Promise<void>
+  refreshTransactions: (startMonth?: string, endMonth?: string) => Promise<Transaction[]>
   logout: () => Promise<void>
   addTransaction: (transaction: TransactionDraft) => Promise<void>
   updateTransaction: (id: string, transaction: TransactionDraft) => Promise<void>
@@ -55,11 +55,6 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 const emptyAccountData: AppData = { transactions: [], budgets: [], goals: [], history: [] }
-function accessErrorFrom(results: PromiseSettledResult<unknown>[]) {
-  return results.find((result) => result.status === 'rejected'
-    && result.reason instanceof Error
-    && result.reason.message.startsWith('AUTH_'))
-}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast()
@@ -72,6 +67,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const authEpoch = useRef(0)
   const transactionsRequestId = useRef(0)
   const activePeriod = useRef<{ start?: string; end?: string }>({})
+  const openingBalanceRequests = useRef(new Map<string, Promise<OpeningBalance>>())
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -93,8 +89,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const requestId = ++transactionsRequestId.current
     activePeriod.current = { start: startMonth, end: endMonth }
     const transactions = await getTransactions(startMonth, endMonth)
-    if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch || requestId !== transactionsRequestId.current) return
-    setData((current) => ({ ...current, transactions }))
+    if (auth?.currentUser?.uid === uid && authEpoch.current === epoch && requestId === transactionsRequestId.current) {
+      setData((current) => ({ ...current, transactions }))
+    }
+    return transactions
   }, [])
 
   const loadBudgets = useCallback(async () => {
@@ -114,6 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUser(null)
       setData(emptyAccountData)
       setCategories([])
+      openingBalanceRequests.current.clear()
       sessionStorage.removeItem('gasel-user')
 
       if (!firebaseUser) {
@@ -132,40 +131,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      void getAuthSession()
-        .then(async (session) => {
+      void getBootstrapData()
+        .then((bootstrap) => {
           if (auth?.currentUser?.uid !== firebaseUser.uid || authEpoch.current !== epoch) return
-          if (!session.emailVerified) {
-            setUser({ ...profile, access: 'verificationRequired' })
-            return
-          }
-          if (!session.emailAllowed) {
-            setUser({ ...profile, access: 'emailDomainBlocked' })
-            return
-          }
-
-          const [transactionsResult, categoriesResult, budgetsResult, goalsResult] = await Promise.allSettled([getTransactions(), getCategories(), getBudgets(), getGoals()])
-          if (auth?.currentUser?.uid !== firebaseUser.uid || authEpoch.current !== epoch) return
-          const authFailure = accessErrorFrom([transactionsResult, categoriesResult, budgetsResult, goalsResult])
-          if (authFailure?.status === 'rejected') {
-            if (authFailure.reason.message === 'AUTH_EMAIL_UNVERIFIED') setUser({ ...profile, access: 'verificationRequired' })
-            else if (authFailure.reason.message === 'AUTH_EMAIL_DOMAIN_BLOCKED') setUser({ ...profile, access: 'emailDomainBlocked' })
-            else await firebaseSignOut(auth)
-            return
-          }
-          if (transactionsResult.status === 'fulfilled') setData((current) => ({ ...current, transactions: transactionsResult.value }))
-          else console.error('Unable to load transactions', transactionsResult.reason instanceof Error ? transactionsResult.reason.message : 'Unknown error')
-          if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value)
-          else console.error('Unable to load categories', categoriesResult.reason instanceof Error ? categoriesResult.reason.message : 'Unknown error')
-          setData((current) => ({ ...current,
-            budgets: budgetsResult.status === 'fulfilled' ? budgetsResult.value : current.budgets,
-            goals: goalsResult.status === 'fulfilled' ? goalsResult.value : current.goals,
-          }))
+          setCategories(bootstrap.categories)
+          setData((current) => ({ ...current, budgets: bootstrap.budgets, goals: bootstrap.goals }))
           setUser({ ...profile, access: 'granted' })
         })
         .catch(async (error) => {
           console.error('Unable to validate account access', error instanceof Error ? error.message : 'Unknown error')
-          if (auth?.currentUser?.uid === firebaseUser.uid && authEpoch.current === epoch) await firebaseSignOut(auth)
+          if (auth?.currentUser?.uid !== firebaseUser.uid || authEpoch.current !== epoch) return
+          if (error instanceof Error && error.message === 'AUTH_EMAIL_UNVERIFIED') setUser({ ...profile, access: 'verificationRequired' })
+          else if (error instanceof Error && error.message === 'AUTH_EMAIL_DOMAIN_BLOCKED') setUser({ ...profile, access: 'emailDomainBlocked' })
+          else await firebaseSignOut(auth)
         })
         .finally(() => {
           if (auth?.currentUser?.uid === firebaseUser.uid && authEpoch.current === epoch) setIsAuthReady(true)
@@ -217,6 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setData(emptyAccountData)
     setCategories([])
+    openingBalanceRequests.current.clear()
     setIsAuthReady(false)
     sessionStorage.removeItem('gasel-user')
     if (auth?.currentUser) await firebaseSignOut(auth)
@@ -267,6 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const created = await createTransaction(transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: [created, ...current.transactions.filter((item) => item.id !== created.id)] }))
+    openingBalanceRequests.current.clear()
     await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
     showToast(translate(language, 'changesSaved'))
   }, [loadBudgets, loadTransactions, language, showToast])
@@ -278,6 +258,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const updated = await persistTransaction(id, transaction)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.map((item) => item.id === id ? updated : item) }))
+    openingBalanceRequests.current.clear()
     await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
     showToast(translate(language, 'changesSaved'))
   }, [language, loadBudgets, loadTransactions, showToast])
@@ -290,6 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const deleted = await removeTransaction(id, scope)
     if (auth?.currentUser?.uid !== uid || authEpoch.current !== epoch) return
     setData((current) => ({ ...current, transactions: current.transactions.filter((item) => !deleted.ids.includes(item.id)) }))
+    openingBalanceRequests.current.clear()
     await Promise.all([loadBudgets(), loadTransactions(activePeriod.current.start, activePeriod.current.end)])
     showToast(translate(language, 'itemDeleted'))
   }, [language, loadBudgets, loadTransactions, showToast])
@@ -329,7 +311,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [language, showToast])
 
   const getOpeningBalance = useCallback(async (month: string) => {
-    if (auth?.currentUser) return fetchOpeningBalance(month)
+    if (auth?.currentUser) {
+      const cached = openingBalanceRequests.current.get(month)
+      if (cached) return cached
+      const request = fetchOpeningBalance(month).catch((error) => {
+        openingBalanceRequests.current.delete(month)
+        throw error
+      })
+      openingBalanceRequests.current.set(month, request)
+      return request
+    }
     const stored = localStorage.getItem(`gasel-opening-balance-${month}`)
     const openingBalance = Number(stored || 0)
     return { openingBalance, automaticOpeningBalance: openingBalance, isManual: stored !== null }
@@ -339,6 +330,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!Number.isFinite(value)) throw new Error('INVALID_BALANCE')
     if (auth?.currentUser) {
       const openingBalance = (await persistOpeningBalance(month, value)).openingBalance
+      openingBalanceRequests.current.delete(month)
       showToast(translate(language, 'changesSaved'))
       return openingBalance
     }
@@ -348,7 +340,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [language, showToast])
 
   const restoreOpeningBalance = useCallback(async (month: string) => {
-    if (auth?.currentUser) return restorePersistedOpeningBalance(month)
+    if (auth?.currentUser) {
+      const restored = await restorePersistedOpeningBalance(month)
+      openingBalanceRequests.current.set(month, Promise.resolve(restored))
+      return restored
+    }
     localStorage.removeItem(`gasel-opening-balance-${month}`)
     return { openingBalance: 0, automaticOpeningBalance: 0, isManual: false }
   }, [])
@@ -360,6 +356,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return 0
     }
     const result = await persistOpeningBalanceToGoal(month, goalId, amount)
+    openingBalanceRequests.current.delete(month)
     setData((current) => ({ ...current, goals: current.goals.map((goal) => goal.id === result.goal.id ? result.goal : goal) }))
     return result.openingBalance
   }, [])

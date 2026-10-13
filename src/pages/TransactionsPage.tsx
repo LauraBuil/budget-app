@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card'
 import { useApp } from '../context/AppContext'
 import { MonthlyBalanceCard } from '../components/MonthlyBalanceCard'
 import { MonthPicker } from '../components/ui/MonthPicker'
+import { LoadingState } from '../components/ui/LoadingState'
 import { CategoryFilter } from '../components/categories/CategoryFilter'
 import { ExpenseGroupFilter } from '../components/transactions/ExpenseGroupFilter'
 import { getTransactions } from '../lib/api'
@@ -28,6 +29,7 @@ export function TransactionsPage() {
   const [deleting, setDeleting] = useState<Transaction>()
   const [showPeriod, setShowPeriod] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [baseLoading, setBaseLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [filtered, setFiltered] = useState<Transaction[]>([])
   const [startMonth, setStartMonth] = useState(() => localDate().slice(0, 7))
@@ -35,9 +37,23 @@ export function TransactionsPage() {
   const period = startMonth <= endMonth ? { start: startMonth, end: endMonth } : { start: endMonth, end: startMonth }
   const categoryKey = categories.join(',')
   const groupKey = expenseGroups.join(',')
+  const hasServerFilters = Boolean(search.trim() || filter !== 'all' || categoryKey || groupKey || sort !== 'desc')
 
-  useEffect(() => { void refreshTransactions(period.start, period.end).catch(() => setFailed(true)) }, [period.start, period.end, refreshTransactions])
   useEffect(() => {
+    let active = true
+    setBaseLoading(true); setFailed(false)
+    void refreshTransactions(period.start, period.end)
+      .catch(() => { if (active) setFailed(true) })
+      .finally(() => { if (active) setBaseLoading(false) })
+    return () => { active = false }
+  }, [period.start, period.end, refreshTransactions])
+
+  useEffect(() => {
+    if (!hasServerFilters) {
+      setFiltered(data.transactions)
+      setLoading(baseLoading)
+      return
+    }
     let active = true
     setLoading(true); setFailed(false)
     const timer = window.setTimeout(() => {
@@ -47,7 +63,7 @@ export function TransactionsPage() {
         .finally(() => { if (active) setLoading(false) })
     }, 200)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [period.start, period.end, search, filter, categoryKey, groupKey, sort, data.transactions])
+  }, [period.start, period.end, search, filter, categoryKey, groupKey, sort, data.transactions, baseLoading, hasServerFilters])
 
   const totals = useMemo(() => getPeriodComparison(data.transactions.filter((item) => item.date <= localDate()), period.end, period.end), [data.transactions, period.end])
   const closeModal = () => { setOpen(false); setEditing(undefined) }
@@ -68,7 +84,7 @@ export function TransactionsPage() {
       <div className="transaction-filter-row"><ExpenseGroupFilter value={expenseGroups} onChange={(groups) => { setExpenseGroups(groups); if (groups.length && filter === 'income') setFilter('expense') }}/><CategoryFilter value={categories} onChange={setCategories}/><label className="transaction-sort">{t('sortByDate')}<select value={sort} onChange={(event) => setSort(event.target.value as 'asc' | 'desc')}><option value="desc">{t('dateDescending')}</option><option value="asc">{t('dateAscending')}</option></select></label></div>
       <p className="form-hint">{t('inlineEditHint')}</p>
       {(search || categories.length > 0 || expenseGroups.length > 0 || filter !== 'all' || sort !== 'desc') && <button className="inline-edit-button" onClick={() => { setSearch(''); setCategories([]); setExpenseGroups([]); setSort('desc'); setFilter('all') }}>{t('clearFilters')}</button>}
-      {failed ? <p role="alert">{t('cannotConnect')}</p> : <div aria-busy={loading} className={loading ? 'transaction-results--loading' : ''}><TransactionList transactions={filtered} onEdit={edit} onDelete={async (id) => setDeleting(filtered.find((item) => item.id === id))}/>{!loading && !filtered.length && <p>{t('noMatchingTransactions')}</p>}</div>}
+      {failed ? <p role="alert">{t('cannotConnect')}</p> : <div aria-busy={loading} className={loading ? 'transaction-results--loading' : ''}>{loading ? <LoadingState compact label={t('loading')} /> : <><TransactionList transactions={filtered} onEdit={edit} onDelete={async (id) => setDeleting(filtered.find((item) => item.id === id))}/>{!filtered.length && <p>{t('noMatchingTransactions')}</p>}</>}</div>}
     </Card>
     <TransactionModal open={open} transaction={editing} onClose={closeModal} initialDate={period.end === localDate().slice(0,7) ? undefined : `${period.end}-01`}/>
     {deleting && <DeleteTransactionModal transaction={deleting} onClose={() => setDeleting(undefined)}/>}

@@ -3,6 +3,7 @@ import type { Budget, BudgetDraft, Category, Goal, GoalDraft, Transaction, Trans
 
 export interface TransactionsQuery { type?: Transaction['type'] | 'all'; search?: string; category?: string; categories?: string[]; expenseGroups?: string[]; sort?: 'asc' | 'desc' }
 export interface AuthSession { emailVerified: boolean; emailAllowed: boolean }
+export interface BootstrapData { categories: Category[]; budgets: Budget[]; goals: Goal[] }
 
 async function authorizedRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = await auth?.currentUser?.getIdToken()
@@ -24,6 +25,7 @@ async function authorizedRequest<T>(url: string, options: RequestInit = {}): Pro
 }
 
 export const getAuthSession = () => authorizedRequest<AuthSession>('/api/auth/session')
+export const getBootstrapData = () => authorizedRequest<BootstrapData>('/api/bootstrap')
 
 export const getTransactions = async (startMonth?: string, endMonth?: string, filters: TransactionsQuery = {}) => {
   const query = new URLSearchParams()
