@@ -6,12 +6,14 @@ import {
   reload,
   sendEmailVerification,
   sendPasswordResetEmail,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile
 } from 'firebase/auth'
 import {auth, isFirebaseConfigured} from '../lib/firebase'
+import {publicWebUrl, runningOnAndroid} from '../lib/runtime'
 import {createBudget, createCategory, createGoal, createTransaction, deleteBudget as removeBudget, deleteCategory as removeCategory, deleteGoal as removeGoal, deleteTransaction as removeTransaction, getBootstrapData, getBudgets, getOpeningBalance as fetchOpeningBalance, getTransactions, moveOpeningBalanceToGoal as persistOpeningBalanceToGoal, restoreOpeningBalance as restorePersistedOpeningBalance, saveOpeningBalance as persistOpeningBalance, type OpeningBalance, updateBudget as persistBudget, updateCategory as persistCategory, updateGoal as persistGoal, updateTransaction as persistTransaction} from '../lib/api'
 import {translate, type TranslationKey} from '../lib/i18n'
 import { useToast } from './ToastContext'
@@ -158,21 +160,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : await signInWithEmailAndPassword(auth, email, password)
     if (register) {
       auth.languageCode = language
-      await sendEmailVerification(result.user, { url: `${window.location.origin}/login` })
+      await sendEmailVerification(result.user, { url: `${publicWebUrl}/login` })
     }
     await result.user.getIdToken()
   }, [language])
 
   const loginWithGoogle = useCallback(async () => {
     if (!auth || !isFirebaseConfigured) throw new Error('FIREBASE_NOT_CONFIGURED')
-    const result = await signInWithPopup(auth, new GoogleAuthProvider())
+    let result
+    if (runningOnAndroid) {
+      const clientId = import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID
+      if (!clientId) throw new Error('GOOGLE_CLIENT_ID_NOT_CONFIGURED')
+      const { signIn } = await import('@choochmeque/tauri-plugin-google-auth-api')
+      const tokens = await signIn({
+        clientId,
+        // Credential Manager already returns the OpenID token. Requesting
+        // `openid` again through Android's AuthorizationClient can make the
+        // second native authorization step fail on otherwise valid clients.
+        scopes: ['email', 'profile'],
+        flowType: 'native',
+      })
+      if (!tokens.idToken) throw new Error('GOOGLE_ID_TOKEN_MISSING')
+      const credential = GoogleAuthProvider.credential(tokens.idToken, tokens.accessToken || null)
+      result = await signInWithCredential(auth, credential)
+    } else {
+      result = await signInWithPopup(auth, new GoogleAuthProvider())
+    }
     await result.user.getIdToken()
   }, [])
 
   const resendVerificationEmail = useCallback(async () => {
     if (!auth?.currentUser) throw new Error('AUTH_REQUIRED')
     auth.languageCode = language
-    await sendEmailVerification(auth.currentUser, { url: `${window.location.origin}/login` })
+    await sendEmailVerification(auth.currentUser, { url: `${publicWebUrl}/login` })
     showToast(translate(language, 'verificationEmailSent'))
   }, [language, showToast])
 
@@ -198,6 +218,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openingBalanceRequests.current.clear()
     setIsAuthReady(false)
     sessionStorage.removeItem('gasel-user')
+    if (runningOnAndroid) {
+      try {
+        const { signOut } = await import('@choochmeque/tauri-plugin-google-auth-api')
+        await signOut()
+      } catch {
+        // Firebase logout must still complete if the native provider is unavailable.
+      }
+    }
     if (auth?.currentUser) await firebaseSignOut(auth)
     else setIsAuthReady(true)
   }, [])

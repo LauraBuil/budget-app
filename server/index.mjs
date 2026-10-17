@@ -20,6 +20,12 @@ dotenv.config({ path: '.env.local' })
 
 const port = Number(process.env.API_PORT || 8787)
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
+const mobileClientOrigins = new Set([
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'tauri://localhost',
+  ...String(process.env.MOBILE_CLIENT_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+])
 const databaseUrl = process.env.DATABASE_URL
 const firebaseProjectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID
 const firebaseApiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY
@@ -40,7 +46,12 @@ const app = express()
 app.set('trust proxy', 1)
 app.disable('x-powered-by')
 app.use(helmet())
-app.use(cors({ origin: clientOrigin }))
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || origin === clientOrigin || mobileClientOrigins.has(origin)) return callback(null, true)
+    return callback(new Error('CORS_ORIGIN_DENIED'))
+  },
+}))
 app.use(express.json({ limit: '32kb' }))
 app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }))
 app.use('/api', (_request, response, next) => {

@@ -1,4 +1,5 @@
 import { auth } from './firebase'
+import { apiUrl } from './runtime'
 import type { Budget, BudgetDraft, Category, Goal, GoalDraft, Transaction, TransactionDraft } from '../types'
 
 export interface TransactionsQuery { type?: Transaction['type'] | 'all'; search?: string; category?: string; categories?: string[]; expenseGroups?: string[]; sort?: 'asc' | 'desc' }
@@ -8,7 +9,7 @@ export interface BootstrapData { categories: Category[]; budgets: Budget[]; goal
 async function authorizedRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = await auth?.currentUser?.getIdToken()
   if (!token) throw new Error('AUTH_REQUIRED')
-  const response = await fetch(url, {
+  const response = await fetch(apiUrl(url), {
     ...options,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers },
   }).catch((error) => {

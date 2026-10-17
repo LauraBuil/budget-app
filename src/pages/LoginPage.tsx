@@ -32,8 +32,19 @@ export function LoginPage() {
     setError('')
     try { await loginWithGoogle() }
     catch (cause) {
-      if (cause instanceof Error && cause.message.includes('popup-closed-by-user')) return
-      setError(cause instanceof Error && cause.message === 'FIREBASE_NOT_CONFIGURED' ? t('demoNotice') : t('cannotConnectWithGoogle'))
+      const details = cause instanceof Error ? cause.message : String(cause || '')
+      if (/popup-closed-by-user|cancelled|canceled/i.test(details)) return
+      if (details === 'FIREBASE_NOT_CONFIGURED') setError(t('demoNotice'))
+      else if (/No Google account found/i.test(details)) setError(t('googleAccountMissing'))
+      else if (/network|timeout/i.test(details)) setError(t('googleNetworkError'))
+      else if (/Credential error|configuration|developer console|DEVELOPER_ERROR/i.test(details)) {
+        const diagnostic = details.replace(/\s+/g, ' ').trim().slice(0, 160)
+        setError(`${t('googleAndroidConfigurationError')} (${diagnostic})`)
+      }
+      else {
+        const diagnostic = details.replace(/\s+/g, ' ').trim().slice(0, 160)
+        setError(diagnostic ? `${t('cannotConnectWithGoogle')} (${diagnostic})` : t('cannotConnectWithGoogle'))
+      }
     }
     finally { setLoading(false) }
   }
