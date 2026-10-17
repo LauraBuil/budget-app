@@ -5,6 +5,15 @@ dist
 .DS_Store
 *.log
 *.tsbuildinfo
+*.apk
+*.aab
 .idea/
 .vercel
 .env*
+
+# Local mobile screenshots
+/gasel-*-phone.png
+
+# Generated files from the vendored Android plugin
+/src-tauri/vendor/**/android/build/
+/src-tauri/vendor/**/android/.tauri/

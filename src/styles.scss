@@ -21,6 +21,13 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 76% 0%, color-mix(in srgb, $accent-soft 34%, transparent), transparent 32%), $bg; color: $text; }
+.tauri-app body,
+.android-app body {
+  --app-safe-top: max(env(safe-area-inset-top, 0px), 28px);
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior: none;
+}
 button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
@@ -386,6 +393,16 @@ h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0; }
   .preference-controls--compact { position: static; }
   .app-shell { display: block; }
   .mobile-menu { display: grid; place-items: center; position: fixed; z-index: 18; top: .85rem; left: .85rem; width: 42px; height: 42px; border: 1px solid $line; border-radius: 11px; background: $surface-solid; box-shadow: $shadow; }
+  .tauri-app body,
+  .android-app body { padding-top: 0; }
+  .tauri-app .mobile-menu,
+  .tauri-app .preference-controls--floating,
+  .android-app .mobile-menu,
+  .android-app .preference-controls--floating { top: calc(var(--app-safe-top) + .65rem); }
+  .tauri-app .page,
+  .android-app .page { padding-top: calc(var(--app-safe-top) + 3.75rem); }
+  .tauri-app .sidebar,
+  .android-app .sidebar { padding-top: calc(var(--app-safe-top) + 1.35rem); }
   .sidebar { position: fixed; left: 0; transform: translateX(-102%); transition: transform .25s ease; width: 250px; }
   .sidebar--open { transform: translateX(0); }
   .sidebar__close { display: block; border: 0; background: transparent; }

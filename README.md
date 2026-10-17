@@ -13,6 +13,7 @@ Gasel est une application personnelle de gestion de budget. Firebase Authenticat
 - modification du nom directement depuis l’accueil ;
 - thème clair/sombre, français/anglais et calculatrice disponible dans les pages connectées ;
 - authentification e-mail/mot de passe avec Firebase ;
+- applications Android et iOS basées sur Tauri 2, partageant le même compte et les mêmes données que le site ;
 - données isolées par utilisateur dans Neon PostgreSQL.
 
 ## Règles de gestion
@@ -41,3 +42,36 @@ npm run test:recurrence
 Le dernier test utilise la connexion Neon configurée localement, mais écrit exclusivement dans des tables temporaires et termine par un rollback. Il vérifie les récurrences, les changements de catégorie, les jours de fin de mois, les suppressions, l'isolation des comptes et les reports de solde. Il ne modifie pas les données financières enregistrées.
 
 Les tests locaux ne remplacent pas une vérification après déploiement. Aucun push ni déploiement ne doit être effectué sans autorisation.
+
+## Applications mobiles Tauri
+
+Le dossier `src-tauri` contient l'enveloppe native. La version mobile embarque l'interface React, appelle l'API sécurisée de `https://gasel.app` et conserve Firebase Authentication. `VITE_API_BASE_URL` permet de remplacer cette adresse pour un environnement de développement.
+
+### Android
+
+Installer Rust, Android Studio et les SDK/NDK Android indiqués dans la documentation Tauri, puis exécuter :
+
+```sh
+npm run mobile:android:init
+npm run mobile:android:dev
+```
+
+Pour produire les fichiers de distribution :
+
+```sh
+npm run mobile:android:build -- --aab
+npm run mobile:android:build -- --apk
+```
+
+### iOS
+
+La génération et la signature iOS nécessitent macOS, Xcode et CocoaPods. Sur le Mac de compilation :
+
+```sh
+npm install
+npm run mobile:ios:init
+npm run mobile:ios:dev
+npm run mobile:ios:build
+```
+
+L'identifiant natif est `app.gasel.mobile`. Les icônes Android et iOS sont générées depuis `public/favicon.svg`. La connexion e-mail/mot de passe et les liens de vérification sont compatibles ; la connexion Google doit utiliser un flux OAuth système/natif avant publication, car Google refuse l'authentification OAuth dans une WebView mobile intégrée.
