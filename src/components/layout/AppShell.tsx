@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Goal, House, LogOut, Menu, Settings, Tags, WalletCards, X } from 'lucide-react'
+import { BarChart3, CalendarDays, Goal, House, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Tags, WalletCards, X } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useState } from 'react'
 import { Brand } from '../Brand'
@@ -16,14 +16,20 @@ const navigation = [
 export function AppShell() {
   const { t, user, logout } = useApp()
   const [open, setOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('gasel-sidebar-collapsed') === 'true')
+  const setSidebarCollapsed = (next: boolean) => {
+    setCollapsed(next)
+    localStorage.setItem('gasel-sidebar-collapsed', String(next))
+  }
   return (
-    <div className="app-shell">
+    <div className={`app-shell${collapsed ? ' app-shell--sidebar-collapsed' : ''}`}>
       <button className="mobile-menu" onClick={() => setOpen(true)} aria-label={t('menu')}><Menu /></button>
+      <button className="sidebar-reopen" type="button" onClick={() => setSidebarCollapsed(false)} aria-label={t('menu')} aria-expanded={!collapsed}><PanelLeftOpen size={19}/></button>
       {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label={t('closeMenu')} />}
       <aside className={`sidebar ${open ? 'sidebar--open' : ''}`}>
         <div className="sidebar__top">
           <Brand compact />
-          <button className="sidebar__close" onClick={() => setOpen(false)} aria-label={t('close')}><X /></button>
+          <div className="sidebar__top-actions"><button className="sidebar__collapse" type="button" onClick={() => setSidebarCollapsed(true)} aria-label={t('closeMenu')}><PanelLeftClose size={19}/></button><button className="sidebar__close" onClick={() => setOpen(false)} aria-label={t('close')}><X /></button></div>
         </div>
         <nav className="sidebar__nav">
           {navigation.map(({ to, key, icon: Icon }) => (

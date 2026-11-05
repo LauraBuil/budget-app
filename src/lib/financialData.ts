@@ -1,7 +1,14 @@
 import type { Budget, Language, MonthPoint, Transaction } from '../types'
 import { shiftMonth } from './months'
+import { getBudgetCategories } from './budgets'
 
 const categoryPalette = ['#c87d78', '#9c9b86', '#8ca6a0', '#b89cc5', '#dca39b', '#c49b67']
+const categoryColorOverrides: Record<string, string> = {
+  // Blue is deliberately outside the selectable budget palette so food can
+  // never be confused with the rose used for rent in the expense donut.
+  food: '#6f8fb7',
+  groceries: '#6f8fb7',
+}
 
 export interface CategoryTotal { category: string; amount: number; color: string; percentage: number }
 
@@ -31,7 +38,7 @@ export function getCategoryTotalsForRange(
     .filter((item) => item.type === type && isInMonthRange(item.date, startMonth, endMonth))
     .forEach((item) => totals.set(item.category, (totals.get(item.category) || 0) + item.amount))
   const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0)
-  return [...totals.entries()].sort(([, first], [, second]) => second - first).map(([category, amount], index) => ({ category, amount, color: budgets.find((budget) => budget.category === category)?.color || categoryPalette[index % categoryPalette.length], percentage: total ? Math.round((amount / total) * 100) : 0 }))
+  return [...totals.entries()].sort(([, first], [, second]) => second - first).map(([category, amount], index) => ({ category, amount, color: categoryColorOverrides[category] || budgets.find((budget) => getBudgetCategories(budget).length === 1 && budget.category === category)?.color || categoryPalette[index % categoryPalette.length], percentage: total ? Math.round((amount / total) * 100) : 0 }))
 }
 
 export function getFinancialHistoryForRange(transactions: Transaction[], startMonth: string, endMonth: string, language: Language): MonthPoint[] {
