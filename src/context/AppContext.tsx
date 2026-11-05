@@ -18,6 +18,7 @@ import {createBudget, createCategory, createGoal, createTransaction, deleteBudge
 import {translate, type TranslationKey} from '../lib/i18n'
 import { useToast } from './ToastContext'
 import type {AppData, BudgetDraft, Category, ExpenseGroup, GoalDraft, Language, Theme, Transaction, TransactionDraft, TransactionType, UserProfile} from '../types'
+import { getBudgetCategories, sameBudgetCategories } from '../lib/budgets'
 
 interface AppContextValue {
   data: AppData
@@ -306,12 +307,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addBudget = useCallback(async (budget: BudgetDraft) => {
     const created = auth?.currentUser ? await createBudget(budget) : { ...budget, id: `budget-${Date.now()}`, spent: 0 }
-    setData((current) => ({ ...current, budgets: [...current.budgets.filter((item) => item.id !== created.id && item.category !== created.category), created] }))
+    setData((current) => ({ ...current, budgets: [...current.budgets.filter((item) => item.id !== created.id && !sameBudgetCategories(getBudgetCategories(item), getBudgetCategories(created))), created] }))
   }, [])
 
   const updateBudget = useCallback(async (id: string, budget: BudgetDraft) => {
     const updated = auth?.currentUser ? await persistBudget(id, budget) : { ...budget, id, spent: data.budgets.find((item) => item.id === id)?.spent || 0 }
-    setData((current) => ({ ...current, budgets: current.budgets.map((item) => item.id === id ? updated : item) }))
+    setData((current) => ({ ...current, budgets: [...current.budgets.filter((item) => item.id !== id && item.id !== updated.id), updated] }))
     showToast(translate(language, 'changesSaved'))
   }, [data.budgets, language, showToast])
 

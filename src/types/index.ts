@@ -39,6 +39,7 @@ export interface Budget {
   id: string
   name: string
   category: string
+  categories: string[]
   limit: number
   spent: number
   color: string
@@ -46,7 +47,7 @@ export interface Budget {
   icon: IconId
 }
 
-export type BudgetDraft = Pick<Budget, 'name' | 'category' | 'limit' | 'color' | 'note' | 'icon'>
+export type BudgetDraft = Pick<Budget, 'name' | 'category' | 'categories' | 'limit' | 'color' | 'note' | 'icon'>
 
 export interface Goal {
   id: string

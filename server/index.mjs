@@ -204,7 +204,7 @@ app.delete('/api/categories/:id', authenticate, async (request, response, next) 
     const [used] = await sql`SELECT c.id FROM categories c WHERE c.id=${request.params.id} AND c.user_id=${request.user.uid} AND (
       EXISTS (SELECT 1 FROM transactions t WHERE t.user_id=c.user_id AND t.category=c.slug AND t.type=c.type)
       OR EXISTS (SELECT 1 FROM recurring_expenses r WHERE r.user_id=c.user_id AND r.category=c.slug AND r.type=c.type AND r.active)
-      OR EXISTS (SELECT 1 FROM budgets b WHERE b.user_id=c.user_id AND b.category=c.slug AND c.type='expense'))`
+      OR EXISTS (SELECT 1 FROM budgets b WHERE b.user_id=c.user_id AND (b.category=c.slug OR c.slug = ANY(b.categories)) AND c.type='expense'))`
     if (used) return response.status(409).json({ error: 'CATEGORY_IN_USE' })
     const rows = await sql`DELETE FROM categories WHERE id = ${request.params.id} AND user_id = ${request.user.uid} RETURNING id`
     if (!rows[0]) return response.status(404).json({ error: 'CATEGORY_NOT_FOUND' })
@@ -216,11 +216,17 @@ const budgetColors = new Set(['#c87d78', '#dca39b', '#9c9b86', '#e8b7ad', '#8ca6
 
 async function budgetRows(uid) {
   return sql`
-    SELECT b.id, b.name, b.category, b.monthly_limit::float8 AS limit, b.color, b.note, b.icon,
+    SELECT b.id, b.name, b.category, b.categories, b.monthly_limit::float8 AS limit, b.color, b.note, b.icon,
       COALESCE(SUM(t.amount), 0)::float8 AS spent
     FROM budgets b
     LEFT JOIN transactions t ON t.user_id = b.user_id
-      AND (t.category = b.category OR (b.category = 'non-essential' AND t.expense_group = 'nonEssential'))
+      AND (
+        t.category = ANY(b.categories)
+        OR ('fixed-expenses' = ANY(b.categories) AND t.expense_group = 'fixed')
+        OR ('daily-expenses' = ANY(b.categories) AND t.expense_group = 'daily')
+        OR ('non-essential' = ANY(b.categories) AND t.expense_group = 'nonEssential')
+        OR ('unexpected-expenses' = ANY(b.categories) AND t.expense_group = 'unexpected')
+      )
       AND t.type = 'expense'
       AND t.date >= date_trunc('month', CURRENT_DATE)::date
       AND t.date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date
@@ -232,12 +238,15 @@ async function budgetRows(uid) {
 
 function validBudget(body) {
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
-  const category = typeof body?.category === 'string' ? body.category.trim() : ''
+  const rawCategories = Array.isArray(body?.categories) ? body.categories : [body?.category]
+  const categories = [...new Set(rawCategories.filter((item) => typeof item === 'string').map((item) => item.trim()))].sort()
+  const category = categories[0] || ''
   const limit = Number(body?.limit)
   const color = typeof body?.color === 'string' && budgetColors.has(body.color) ? body.color : '#c87d78'
   const note = typeof body?.note === 'string' ? body.note.trim() : ''
   const icon = allowedIconIds.has(body?.icon) ? body.icon : 'other'
-  return name.length <= 80 && /^[a-z0-9-]{1,80}$/.test(category) && Number.isFinite(limit) && limit > 0 && limit <= 10_000_000 && note.length <= 1000 ? { name, category, limit, color, note, icon } : null
+  const validCategories = categories.length > 0 && categories.length <= 50 && categories.every((item) => /^[a-z0-9-]{1,80}$/.test(item))
+  return name.length <= 80 && validCategories && Number.isFinite(limit) && limit > 0 && limit <= 10_000_000 && note.length <= 1000 ? { name, category, categories, limit, color, note, icon } : null
 }
 
 app.get('/api/budgets', authenticate, async (request, response, next) => {
@@ -248,13 +257,14 @@ app.post('/api/budgets', authenticate, async (request, response, next) => {
   const budget = validBudget(request.body)
   if (!budget) return response.status(400).json({ error: 'INVALID_BUDGET' })
   try {
-    await sql`
-      INSERT INTO budgets (id, user_id, name, category, monthly_limit, color, note, icon)
-      VALUES (${crypto.randomUUID()}, ${request.user.uid}, ${budget.name}, ${budget.category}, ${budget.limit}, ${budget.color}, ${budget.note}, ${budget.icon})
-      ON CONFLICT (user_id, category) DO UPDATE SET name = EXCLUDED.name, monthly_limit = EXCLUDED.monthly_limit, color = EXCLUDED.color, note = EXCLUDED.note, icon = EXCLUDED.icon
+    const created = await sql`
+      INSERT INTO budgets (id, user_id, name, category, categories, monthly_limit, color, note, icon)
+      VALUES (${crypto.randomUUID()}, ${request.user.uid}, ${budget.name}, ${budget.category}, ${budget.categories}::text[], ${budget.limit}, ${budget.color}, ${budget.note}, ${budget.icon})
+      ON CONFLICT (user_id, categories) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, monthly_limit = EXCLUDED.monthly_limit, color = EXCLUDED.color, note = EXCLUDED.note, icon = EXCLUDED.icon
+      RETURNING id
     `
     const rows = await budgetRows(request.user.uid)
-    return response.status(201).json(rows.find((item) => item.category === budget.category))
+    return response.status(201).json(rows.find((item) => item.id === created[0].id))
   } catch (error) { return next(error) }
 })
 
@@ -262,8 +272,9 @@ app.patch('/api/budgets/:id', authenticate, async (request, response, next) => {
   const budget = validBudget(request.body)
   if (!budget) return response.status(400).json({ error: 'INVALID_BUDGET' })
   try {
+    await sql`DELETE FROM budgets WHERE user_id = ${request.user.uid} AND categories = ${budget.categories}::text[] AND id <> ${request.params.id}`
     const rows = await sql`
-      UPDATE budgets SET name = ${budget.name}, category = ${budget.category}, monthly_limit = ${budget.limit}, color = ${budget.color}, note = ${budget.note}, icon = ${budget.icon}
+      UPDATE budgets SET name = ${budget.name}, category = ${budget.category}, categories = ${budget.categories}::text[], monthly_limit = ${budget.limit}, color = ${budget.color}, note = ${budget.note}, icon = ${budget.icon}
       WHERE id = ${request.params.id} AND user_id = ${request.user.uid}
       RETURNING id
     `

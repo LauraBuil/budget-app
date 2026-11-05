@@ -73,12 +73,16 @@ export async function ensureSchema(sql) {
       color TEXT NOT NULL DEFAULT '#c87d78' CHECK (color ~ '^#[0-9a-fA-F]{6}$'),
       note TEXT NOT NULL DEFAULT '' CHECK (char_length(note) <= 1000),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (user_id, category)
+      categories TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]
     )
   `
   await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '' CHECK (char_length(name) <= 80)`
   await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '' CHECK (char_length(note) <= 1000)`
   await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS icon TEXT NOT NULL DEFAULT 'other'`
+  await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`
+  await sql`UPDATE budgets SET categories = ARRAY[category] WHERE cardinality(categories) = 0`
+  await sql`ALTER TABLE budgets DROP CONSTRAINT IF EXISTS budgets_user_id_category_key`
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS budgets_user_categories_idx ON budgets (user_id, categories)`
   await sql`
     CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY,
