@@ -1,6 +1,6 @@
 [package]
 name = "gasel"
-version = "0.1.5"
+version = "0.1.6"
 description = "Application mobile et desktop Gasel"
 authors = ["Gasel"]
 edition = "2024"
